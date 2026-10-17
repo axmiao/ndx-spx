@@ -103,10 +103,10 @@
   <rect x="70" y="888" width="660" height="130" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5"/>
   <text x="400" y="922" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="highPoint">历史收盘最高点 31,361.37（2026-10-06）</text>
   <text x="400" y="956" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最大回撤 -83.00%（2000-03-27 至 2002-10-09，参考值）</text>
-  <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="sourceNote">数据来源：Yahoo Finance（近10年日线）</text>
+  <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="sourceNote">数据来源：Yahoo Finance（近5年日线）</text>
 
   <line x1="120" y1="1058" x2="680" y2="1058" stroke="#FFD700" stroke-width="1" opacity="0.25"/>
-  <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近10年日收盘价；回撤持续天数按自然日；最大回撤为全历史参考值</text>
+  <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日；最大回撤为全历史参考值</text>
   <text x="400" y="1122" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">自动获取经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
   <text x="400" y="1152" text-anchor="middle" font-size="12" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">纳斯达克100 指标监控 · 仅供参考，不构成投资建议</text>
 </svg>
@@ -117,7 +117,7 @@
 // ====== 配置 ======
 const WORKER_URL = "https://ndx-proxy.bugvsdebug.workers.dev";
 const SYMBOL = "%5ENDX";
-const RANGE = "10y";        // 近10年日线，覆盖当前高点与最新数据
+const RANGE = "5y";         // 近5年，Yahoo 会返回真正日线
 const INTERVAL = "1d";
 
 // ====== 静态回退 ======
@@ -153,7 +153,7 @@ function updateSVG(data) {
   document.getElementById("highPoint").textContent = "历史收盘最高点 " + fmt(data.highPoint) + "（" + data.highDate + "）";
 }
 
-// ====== 通过 Worker 获取 Yahoo 数据（近10年日线） ======
+// ====== 通过 Worker 获取 Yahoo 数据（近5年日线） ======
 async function fetchFromWorker() {
   if (WORKER_URL.includes("你的worker名")) {
     throw new Error("WORKER_URL 尚未配置");
@@ -168,44 +168,69 @@ async function fetchFromWorker() {
   const result = json?.chart?.result?.[0];
   if (!result) throw new Error("Yahoo 返回结构异常");
 
+  const meta = result.meta || {};
   const timestamps = result.timestamp || [];
-  const closes = result.indicators?.quote?.[0]?.close || [];
+  // 优先用 adjclose，回退到 close
+  const adj = result.indicators?.adjclose?.[0]?.adjclose;
+  const closes = adj && adj.length === timestamps.length
+    ? adj
+    : (result.indicators?.quote?.[0]?.close || []);
 
-  // 动态校验：只过滤 null、非有限数、负数、明显异常值（>100000）
+  // 严格按索引对齐，只过滤 null / 非有限数 / 非正数
   const bars = [];
   let dropped = 0;
   for (let i = 0; i < timestamps.length; i++) {
     const c = closes[i];
-    if (c == null || !isFinite(c) || c <= 0 || c > 100000) { dropped++; continue; }
+    if (c == null || !isFinite(c) || c <= 0) { dropped++; continue; }
     bars.push({ t: timestamps[i], c: c });
   }
   if (bars.length < 2) throw new Error("有效数据不足（过滤后仅 " + bars.length + " 条）");
 
-  // 调试输出
+  // 调试信息
   const sample = bars.slice(0, 3).map(b => b.c.toFixed(2)).join(", ");
   const tail = bars.slice(-3).map(b => b.c.toFixed(2)).join(", ");
   document.getElementById("debug").textContent =
-    `范围 ${RANGE}/${INTERVAL}，原始 ${timestamps.length} 条，过滤 ${dropped} 条，保留 ${bars.length} 条；首3: ${sample}；尾3: ${tail}`;
+    `范围 ${RANGE}/${INTERVAL}，原始 ${timestamps.length} 条，过滤 ${dropped} 条，保留 ${bars.length} 条；` +
+    `首3: ${sample}；尾3: ${tail}；meta高点: ${meta.fiftyTwoWeekHigh}，meta最新: ${meta.regularMarketPrice}`;
 
-  const last = bars[bars.length - 1];
-  const prev = bars[bars.length - 2];
-
-  // 历史高点：在有效 bars 中取最大值，同时记录对应 bar
+  // 历史高点：在有效 bars 中取最大值
   let highPoint = -Infinity, highBar = null;
   for (const b of bars) {
     if (b.c > highPoint) { highPoint = b.c; highBar = b; }
   }
 
-  const drawdown = (last.c - highPoint) / highPoint * 100;
-  const recovery = (highPoint - last.c) / last.c * 100;
-  const dailyChangePct = (last.c - prev.c) / prev.c * 100;
-  const durationDays = Math.max(0, Math.round((last.t - highBar.t) / 86400));
+  // 校验高点：若与 meta.fiftyTwoWeekHigh 偏差 > 5%，用 meta 值并标注
+  let highDate = new Date(highBar.t * 1000).toISOString().slice(0, 10);
+  let highSource = "bars";
+  if (meta.fiftyTwoWeekHigh && Math.abs(highPoint - meta.fiftyTwoWeekHigh) / meta.fiftyTwoWeekHigh > 0.05) {
+    highPoint = meta.fiftyTwoWeekHigh;
+    highDate = "近52周";
+    highSource = "meta.fiftyTwoWeekHigh";
+  }
 
-  const fmtDate = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
+  // 最新价：优先用最后一条 bar，若与 meta.regularMarketPrice 偏差 > 1%，用 meta 值
+  let latestClose = bars[bars.length - 1].c;
+  let latestDate = new Date(bars[bars.length - 1].t * 1000).toISOString().slice(0, 10);
+  if (meta.regularMarketPrice && Math.abs(latestClose - meta.regularMarketPrice) / meta.regularMarketPrice > 0.01) {
+    latestClose = meta.regularMarketPrice;
+    latestSource = "meta.regularMarketPrice";
+  }
+
+  // 前一日收盘（用于日涨跌）
+  const prevClose = bars.length >= 2 ? bars[bars.length - 2].c : latestClose;
+
+  const drawdown = (latestClose - highPoint) / highPoint * 100;
+  const recovery = (highPoint - latestClose) / latestClose * 100;
+  const dailyChangePct = (latestClose - prevClose) / prevClose * 100;
+
+  // 回撤持续天数：从 highBar 日期到最新日期
+  const highTs = highBar ? highBar.t : bars[bars.length - 1].t;
+  const latestTs = bars[bars.length - 1].t;
+  const durationDays = Math.max(0, Math.round((latestTs - highTs) / 86400));
 
   return {
-    highPoint, highDate: fmtDate(highBar.t),
-    latestClose: last.c, latestDate: fmtDate(last.t),
+    highPoint, highDate,
+    latestClose, latestDate,
     dailyChangePct, drawdown, recovery, durationDays
   };
 }
@@ -220,7 +245,7 @@ async function refreshData() {
   try {
     const data = await fetchFromWorker();
     updateSVG(data);
-    document.getElementById("sourceNote").textContent = "数据来源：Yahoo Finance（近10年日线，经 Worker 代理）";
+    document.getElementById("sourceNote").textContent = "数据来源：Yahoo Finance（近5年日线，经 Worker 代理）";
     status.textContent = "✅ 自动更新成功，数据截止 " + data.latestDate;
   } catch (e) {
     console.warn("自动获取失败：", e.message);
