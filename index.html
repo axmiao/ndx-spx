@@ -43,6 +43,7 @@
   <button class="btn" onclick="refreshData()">刷新数据</button>
   <button class="btn" onclick="downloadSVG()">下载 SVG</button>
   <button class="btn" onclick="downloadPNG()">下载 PNG</button>
+  <button class="btn" onclick="goToSpx()">跳转标普</button>
 </div>
 
 <div class="status" id="status">正在通过 Worker 获取 Yahoo NDX 数据…</div>
@@ -344,6 +345,10 @@ function downloadPNG() {
   };
   img.onerror = function () { URL.revokeObjectURL(url); alert("PNG 导出失败，请改用 SVG。"); };
   img.src = url;
+}
+
+function gotoNasdaq() {
+  location.href = "./spx.html";   // 按实际相对路径调整
 }
 
 // ====== 页面加载 ======
