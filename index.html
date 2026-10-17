@@ -34,6 +34,7 @@
     background: #1a3a6b; color: #FFD700; font-size: 14px; cursor: pointer;
   }
   .hint { color: #FFD70099; font-size: 12px; text-align: center; max-width: 680px; line-height: 1.6; }
+  .debug { color: #FFD70066; font-size: 11px; text-align: center; max-width: 680px; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -45,6 +46,7 @@
 </div>
 
 <div class="status" id="status">正在通过 Worker 获取 Yahoo NDX 数据…</div>
+<div class="debug" id="debug"></div>
 
 <div class="manual">
   <input type="date" id="manualDate" />
@@ -99,12 +101,12 @@
   </g>
 
   <rect x="70" y="888" width="660" height="130" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5"/>
-  <text x="400" y="922" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="highPoint">历史收盘最高点 31,224.47（2026-10-06）</text>
-  <text x="400" y="956" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最大回撤 -83.00%（2000-03-27 至 2002-10-09）</text>
-  <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="sourceNote">数据来源：手动确认</text>
+  <text x="400" y="922" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="highPoint">历史收盘最高点 31,361.37（2026-10-06）</text>
+  <text x="400" y="956" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最大回撤 -83.00%（2000-03-27 至 2002-10-09，参考值）</text>
+  <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="sourceNote">数据来源：Yahoo Finance（近10年日线）</text>
 
   <line x1="120" y1="1058" x2="680" y2="1058" stroke="#FFD700" stroke-width="1" opacity="0.25"/>
-  <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按收盘价；回撤持续天数按自然日；最大回撤按全历史日收盘价</text>
+  <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近10年日收盘价；回撤持续天数按自然日；最大回撤为全历史参考值</text>
   <text x="400" y="1122" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">自动获取经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
   <text x="400" y="1152" text-anchor="middle" font-size="12" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">纳斯达克100 指标监控 · 仅供参考，不构成投资建议</text>
 </svg>
@@ -112,19 +114,21 @@
 <p class="hint">Worker 代理部署后，将代码中的 WORKER_URL 替换为你的地址。自动获取失败时可手动录入收盘价，数据保存在浏览器 localStorage。</p>
 
 <script>
-// ====== 配置：替换为你的 Worker URL ======
+// ====== 配置 ======
 const WORKER_URL = "https://ndx-proxy.bugvsdebug.workers.dev";
-const SYMBOL = "%5ENDX"; // ^NDX
+const SYMBOL = "%5ENDX";
+const RANGE = "10y";        // 近10年日线，覆盖当前高点与最新数据
+const INTERVAL = "1d";
 
 // ====== 静态回退 ======
 const FALLBACK = {
-  highPoint: 31224.47, highDate: "2026-10-06",
+  highPoint: 31361.37, highDate: "2026-10-06",
   latestClose: 29187.55, latestDate: "2026-10-16",
   dailyChangePct: -2.50,
-  drawdown: -6.52, recovery: 6.98, durationDays: 10
+  drawdown: -6.93, recovery: 7.45, durationDays: 10
 };
 
-// ====== 本地缓存（手动录入用） ======
+// ====== 本地缓存 ======
 const CACHE_KEY = "ndx_bars_v1";
 function loadCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "[]"); }
@@ -149,12 +153,12 @@ function updateSVG(data) {
   document.getElementById("highPoint").textContent = "历史收盘最高点 " + fmt(data.highPoint) + "（" + data.highDate + "）";
 }
 
-// ====== 通过 Worker 获取 Yahoo 数据 ======
+// ====== 通过 Worker 获取 Yahoo 数据（近10年日线） ======
 async function fetchFromWorker() {
   if (WORKER_URL.includes("你的worker名")) {
     throw new Error("WORKER_URL 尚未配置");
   }
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?range=max&interval=1d`;
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?range=${RANGE}&interval=${INTERVAL}`;
   const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(target)}`;
 
   const resp = await fetch(proxyUrl);
@@ -167,17 +171,26 @@ async function fetchFromWorker() {
   const timestamps = result.timestamp || [];
   const closes = result.indicators?.quote?.[0]?.close || [];
 
+  // 动态校验：只过滤 null、非有限数、负数、明显异常值（>100000）
   const bars = [];
+  let dropped = 0;
   for (let i = 0; i < timestamps.length; i++) {
-    if (closes[i] != null && closes[i] > 0) {
-      bars.push({ t: timestamps[i], c: closes[i] });
-    }
+    const c = closes[i];
+    if (c == null || !isFinite(c) || c <= 0 || c > 100000) { dropped++; continue; }
+    bars.push({ t: timestamps[i], c: c });
   }
-  if (bars.length < 2) throw new Error("有效数据不足");
+  if (bars.length < 2) throw new Error("有效数据不足（过滤后仅 " + bars.length + " 条）");
+
+  // 调试输出
+  const sample = bars.slice(0, 3).map(b => b.c.toFixed(2)).join(", ");
+  const tail = bars.slice(-3).map(b => b.c.toFixed(2)).join(", ");
+  document.getElementById("debug").textContent =
+    `范围 ${RANGE}/${INTERVAL}，原始 ${timestamps.length} 条，过滤 ${dropped} 条，保留 ${bars.length} 条；首3: ${sample}；尾3: ${tail}`;
 
   const last = bars[bars.length - 1];
   const prev = bars[bars.length - 2];
 
+  // 历史高点：在有效 bars 中取最大值，同时记录对应 bar
   let highPoint = -Infinity, highBar = null;
   for (const b of bars) {
     if (b.c > highPoint) { highPoint = b.c; highBar = b; }
@@ -202,15 +215,15 @@ async function refreshData() {
   const status = document.getElementById("status");
   status.className = "status";
   status.textContent = "正在通过 Worker 获取数据…";
+  document.getElementById("debug").textContent = "";
 
   try {
     const data = await fetchFromWorker();
     updateSVG(data);
-    document.getElementById("sourceNote").textContent = "数据来源：Yahoo Finance（经 Worker 代理）";
+    document.getElementById("sourceNote").textContent = "数据来源：Yahoo Finance（近10年日线，经 Worker 代理）";
     status.textContent = "✅ 自动更新成功，数据截止 " + data.latestDate;
   } catch (e) {
     console.warn("自动获取失败：", e.message);
-    // 优先用本地缓存计算，否则用静态回退
     const bars = loadCache();
     if (bars.length >= 2) {
       const data = computeFromBars(bars);
@@ -222,7 +235,7 @@ async function refreshData() {
       updateSVG(FALLBACK);
       document.getElementById("sourceNote").textContent = "数据来源：手动确认回退";
       status.className = "status error";
-      status.textContent = "⚠️ 自动获取失败（" + e.message + "），已回退至 2026-10-16 数据。";
+      status.textContent = "⚠️ 自动获取失败（" + e.message + "），已回退至静态数据。";
     }
   }
 }
