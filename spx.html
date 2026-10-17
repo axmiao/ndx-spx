@@ -6,35 +6,100 @@
 <title>标普500 回撤与修复监控</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; }
   body {
-    min-height: 100vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 16px;
-    padding: 30px 16px; background: #060e1a;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 30px 16px;
+    background: #060e1a;
     font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    color: #FFD700;
   }
-  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    width: 100%;
+    max-width: 800px;
+  }
   .btn {
-    padding: 10px 24px; border: 1.5px solid #FFD700; border-radius: 8px;
-    background: #1a3a6b; color: #FFD700; font-size: 15px; font-weight: bold;
-    cursor: pointer; transition: all .2s;
+    padding: 10px 24px;
+    border: 1.5px solid #FFD700;
+    border-radius: 8px;
+    background: #1a3a6b;
+    color: #FFD700;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all .2s;
   }
   .btn:hover { background: #FFD700; color: #0a1628; }
-  .preview { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.6); max-width: 100%; }
-  .preview svg { display: block; max-width: 100%; height: auto; }
-  .status { color: #FFD700; font-size: 13px; text-align: center; min-height: 20px; }
+  .status {
+    color: #FFD700;
+    font-size: 13px;
+    text-align: center;
+    min-height: 20px;
+    width: 100%;
+    max-width: 800px;
+  }
   .status.error { color: #ff9999; }
-  .manual { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .debug {
+    color: #FFD70066;
+    font-size: 11px;
+    text-align: center;
+    max-width: 800px;
+    width: 100%;
+    word-break: break-all;
+  }
+  .manual {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 800px;
+  }
   .manual input {
-    padding: 8px 12px; border-radius: 6px; border: 1px solid #FFD70055;
-    background: #0a1628; color: #FFD700; font-size: 14px; width: 140px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #FFD70055;
+    background: #0a1628;
+    color: #FFD700;
+    font-size: 14px;
+    width: 140px;
   }
   .manual input::placeholder { color: #FFD70066; }
   .manual button {
-    padding: 8px 16px; border-radius: 6px; border: 1px solid #FFD700;
-    background: #1a3a6b; color: #FFD700; font-size: 14px; cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid #FFD700;
+    background: #1a3a6b;
+    color: #FFD700;
+    font-size: 14px;
+    cursor: pointer;
   }
-  .hint { color: #FFD70099; font-size: 12px; text-align: center; max-width: 680px; line-height: 1.6; }
-  .debug { color: #FFD70066; font-size: 11px; text-align: center; max-width: 680px; word-break: break-all; }
+  .preview {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  }
+  .preview svg { display: block; width: 100%; height: auto; }
+  .hint {
+    color: #FFD70099;
+    font-size: 12px;
+    text-align: center;
+    max-width: 800px;
+    width: 100%;
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
@@ -43,8 +108,8 @@
   <button class="btn" onclick="refreshData()">刷新数据</button>
   <button class="btn" onclick="downloadSVG()">下载 SVG</button>
   <button class="btn" onclick="downloadPNG()">下载 PNG</button>
-  <button class="btn" onclick="goToNdx()">跳转纳指100</button>
-</di>
+  <button class="btn" onclick="gotoNasdaq()">跳转纳指100</button>
+</div>
 
 <div class="status" id="status">正在通过 Worker 获取 Yahoo SPX 数据…</div>
 <div class="debug" id="debug"></div>
@@ -129,6 +194,11 @@ const FALLBACK = {
   drawdown: -2.04, recovery: 2.08, durationDays: 10
 };
 
+// ====== 跳转纳指页面 ======
+function gotoNasdaq() {
+  location.href = "./index.html";   // 按实际纳指页面文件名调整
+}
+
 // ====== 本地缓存 ======
 const CACHE_KEY = "spx_bars_v1";
 function loadCache() {
@@ -176,7 +246,6 @@ async function fetchFromWorker() {
     ? adj
     : (result.indicators?.quote?.[0]?.close || []);
 
-  // 严格按索引对齐，只过滤 null / 非有限数 / 非正数
   const bars = [];
   let dropped = 0;
   for (let i = 0; i < timestamps.length; i++) {
@@ -186,27 +255,23 @@ async function fetchFromWorker() {
   }
   if (bars.length < 2) throw new Error("有效数据不足（过滤后仅 " + bars.length + " 条）");
 
-  // 调试信息
   const sample = bars.slice(0, 3).map(b => b.c.toFixed(2)).join(", ");
   const tail = bars.slice(-3).map(b => b.c.toFixed(2)).join(", ");
   document.getElementById("debug").textContent =
     `范围 ${RANGE}/${INTERVAL}，原始 ${timestamps.length} 条，过滤 ${dropped} 条，保留 ${bars.length} 条；` +
     `首3: ${sample}；尾3: ${tail}；meta高点: ${meta.fiftyTwoWeekHigh}，meta最新: ${meta.regularMarketPrice}`;
 
-  // 历史高点：在有效 bars 中取最大值
   let highPoint = -Infinity, highBar = null;
   for (const b of bars) {
     if (b.c > highPoint) { highPoint = b.c; highBar = b; }
   }
 
-  // 高点校验：与 meta.fiftyTwoWeekHigh 偏差 > 5% 时用 meta 值
   let highDate = new Date(highBar.t * 1000).toISOString().slice(0, 10);
   if (meta.fiftyTwoWeekHigh && Math.abs(highPoint - meta.fiftyTwoWeekHigh) / meta.fiftyTwoWeekHigh > 0.05) {
     highPoint = meta.fiftyTwoWeekHigh;
     highDate = "近52周";
   }
 
-  // 最新价：与 meta.regularMarketPrice 偏差 > 1% 时用 meta 值
   let latestClose = bars[bars.length - 1].c;
   let latestDate = new Date(bars[bars.length - 1].t * 1000).toISOString().slice(0, 10);
   if (meta.regularMarketPrice && Math.abs(latestClose - meta.regularMarketPrice) / meta.regularMarketPrice > 0.01) {
@@ -339,10 +404,6 @@ function downloadPNG() {
   };
   img.onerror = function () { URL.revokeObjectURL(url); alert("PNG 导出失败，请改用 SVG。"); };
   img.src = url;
-}
-
-function goToNdx() {
-  location.href = "./index.html";   // 按实际相对路径调整
 }
 
 // ====== 页面加载 ======
