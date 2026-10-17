@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纳斯达克100 回撤与修复监控</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    padding: 30px 16px; background: #060e1a;
+    font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  }
+  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    padding: 10px 24px; border: 1.5px solid #FFD700; border-radius: 8px;
+    background: #1a3a6b; color: #FFD700; font-size: 15px; font-weight: bold;
+    cursor: pointer; transition: all .2s;
+  }
+  .btn:hover { background: #FFD700; color: #0a1628; }
+  .preview { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.6); max-width: 100%; }
+  .preview svg { display: block; max-width: 100%; height: auto; }
+  .status { color: #FFD700; font-size: 13px; text-align: center; min-height: 20px; }
+  .status.error { color: #ff9999; }
+  .manual { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .manual input {
+    padding: 8px 12px; border-radius: 6px; border: 1px solid #FFD70055;
+    background: #0a1628; color: #FFD700; font-size: 14px; width: 140px;
+  }
+  .manual input::placeholder { color: #FFD70066; }
+  .manual button {
+    padding: 8px 16px; border-radius: 6px; border: 1px solid #FFD700;
+    background: #1a3a6b; color: #FFD700; font-size: 14px; cursor: pointer;
+  }
+  .hint { color: #FFD70099; font-size: 12px; text-align: center; max-width: 680px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="btn" onclick="refreshData()">刷新数据</button>
+  <button class="btn" onclick="downloadSVG()">下载 SVG</button>
+  <button class="btn" onclick="downloadPNG()">下载 PNG</button>
+</div>
+
+<div class="status" id="status">正在通过 Worker 获取 Yahoo NDX 数据…</div>
+
+<div class="manual">
+  <input type="date" id="manualDate" />
+  <input type="number" id="manualClose" placeholder="收盘价" step="0.01" />
+  <button onclick="applyManual()">录入并更新</button>
+</div>
+
+<div class="preview" id="preview">
+<svg id="card" xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#1a3a6b"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="800" height="1200" fill="url(#bg)"/>
+
+  <text x="400" y="78" text-anchor="middle" font-size="34" font-weight="bold" fill="#FFD700"
+        font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">纳斯达克100 回撤与修复监控</text>
+  <text x="400" y="122" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.75"
+        font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+    代码 NDX ｜ 数据截止：<tspan id="dataDate">2026-10-16</tspan>
+  </text>
+  <line x1="120" y1="150" x2="680" y2="150" stroke="#FFD700" stroke-width="1" opacity="0.35"/>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="180" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5"/>
+    <text x="400" y="234" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
+    <text x="400" y="298" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="drawdown">-6.52%</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="356" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5"/>
+    <text x="400" y="410" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
+    <text x="400" y="474" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="recovery">6.98%</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="532" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5"/>
+    <text x="400" y="586" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
+    <text x="400" y="650" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="duration">10 天</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="708" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5"/>
+    <text x="400" y="762" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
+    <text x="400" y="826" text-anchor="middle" font-size="46" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="latestClose">29,187.55</text>
+    <text x="400" y="848" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.7" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="dailyChange">日涨跌 -2.50%</text>
+  </g>
+
+  <rect x="70" y="888" width="660" height="130" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="400" y="922" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="highPoint">历史收盘最高点 31,224.47（2026-10-06）</text>
+  <text x="400" y="956" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最大回撤 -83.00%（2000-03-27 至 2002-10-09）</text>
+  <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif" id="sourceNote">数据来源：手动确认</text>
+
+  <line x1="120" y1="1058" x2="680" y2="1058" stroke="#FFD700" stroke-width="1" opacity="0.25"/>
+  <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按收盘价；回撤持续天数按自然日；最大回撤按全历史日收盘价</text>
+  <text x="400" y="1122" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">自动获取经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
+  <text x="400" y="1152" text-anchor="middle" font-size="12" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">纳斯达克100 指标监控 · 仅供参考，不构成投资建议</text>
+</svg>
+</div>
+<p class="hint">Worker 代理部署后，将代码中的 WORKER_URL 替换为你的地址。自动获取失败时可手动录入收盘价，数据保存在浏览器 localStorage。</p>
+
+<script>
+// ====== 配置：替换为你的 Worker URL ======
+const WORKER_URL = "https://ndx-proxy.debugvsdebug.workers.dev";
+const SYMBOL = "%5ENDX"; // ^NDX
+
+// ====== 静态回退 ======
+const FALLBACK = {
+  highPoint: 31224.47, highDate: "2026-10-06",
+  latestClose: 29187.55, latestDate: "2026-10-16",
+  dailyChangePct: -2.50,
+  drawdown: -6.52, recovery: 6.98, durationDays: 10
+};
+
+// ====== 本地缓存（手动录入用） ======
+const CACHE_KEY = "ndx_bars_v1";
+function loadCache() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "[]"); }
+  catch { return []; }
+}
+function saveCache(bars) {
+  localStorage.setItem(CACHE_KEY, JSON.stringify(bars));
+}
+
+// ====== 格式化 ======
+const fmt = (n, d = 2) => n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+
+// ====== 更新 SVG ======
+function updateSVG(data) {
+  document.getElementById("dataDate").textContent = data.latestDate;
+  document.getElementById("drawdown").textContent = data.drawdown.toFixed(2) + "%";
+  document.getElementById("recovery").textContent = data.recovery.toFixed(2) + "%";
+  document.getElementById("duration").textContent = data.durationDays + " 天";
+  document.getElementById("latestClose").textContent = fmt(data.latestClose);
+  document.getElementById("dailyChange").textContent = "日涨跌 " + pct(data.dailyChangePct);
+  document.getElementById("highPoint").textContent = "历史收盘最高点 " + fmt(data.highPoint) + "（" + data.highDate + "）";
+}
+
+// ====== 通过 Worker 获取 Yahoo 数据 ======
+async function fetchFromWorker() {
+  if (WORKER_URL.includes("你的worker名")) {
+    throw new Error("WORKER_URL 尚未配置");
+  }
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?range=max&interval=1d`;
+  const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(target)}`;
+
+  const resp = await fetch(proxyUrl);
+  if (!resp.ok) throw new Error("Worker 返回 HTTP " + resp.status);
+  const json = await resp.json();
+
+  const result = json?.chart?.result?.[0];
+  if (!result) throw new Error("Yahoo 返回结构异常");
+
+  const timestamps = result.timestamp || [];
+  const closes = result.indicators?.quote?.[0]?.close || [];
+
+  const bars = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (closes[i] != null && closes[i] > 0) {
+      bars.push({ t: timestamps[i], c: closes[i] });
+    }
+  }
+  if (bars.length < 2) throw new Error("有效数据不足");
+
+  const last = bars[bars.length - 1];
+  const prev = bars[bars.length - 2];
+
+  let highPoint = -Infinity, highBar = null;
+  for (const b of bars) {
+    if (b.c > highPoint) { highPoint = b.c; highBar = b; }
+  }
+
+  const drawdown = (last.c - highPoint) / highPoint * 100;
+  const recovery = (highPoint - last.c) / last.c * 100;
+  const dailyChangePct = (last.c - prev.c) / prev.c * 100;
+  const durationDays = Math.max(0, Math.round((last.t - highBar.t) / 86400));
+
+  const fmtDate = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
+
+  return {
+    highPoint, highDate: fmtDate(highBar.t),
+    latestClose: last.c, latestDate: fmtDate(last.t),
+    dailyChangePct, drawdown, recovery, durationDays
+  };
+}
+
+// ====== 刷新入口 ======
+async function refreshData() {
+  const status = document.getElementById("status");
+  status.className = "status";
+  status.textContent = "正在通过 Worker 获取数据…";
+
+  try {
+    const data = await fetchFromWorker();
+    updateSVG(data);
+    document.getElementById("sourceNote").textContent = "数据来源：Yahoo Finance（经 Worker 代理）";
+    status.textContent = "✅ 自动更新成功，数据截止 " + data.latestDate;
+  } catch (e) {
+    console.warn("自动获取失败：", e.message);
+    // 优先用本地缓存计算，否则用静态回退
+    const bars = loadCache();
+    if (bars.length >= 2) {
+      const data = computeFromBars(bars);
+      updateSVG(data);
+      document.getElementById("sourceNote").textContent = "数据来源：本地缓存";
+      status.className = "status error";
+      status.textContent = "⚠️ Worker 获取失败（" + e.message + "），已用本地缓存数据。";
+    } else {
+      updateSVG(FALLBACK);
+      document.getElementById("sourceNote").textContent = "数据来源：手动确认回退";
+      status.className = "status error";
+      status.textContent = "⚠️ 自动获取失败（" + e.message + "），已回退至 2026-10-16 数据。";
+    }
+  }
+}
+
+// ====== 从本地 bars 计算 ======
+function computeFromBars(bars) {
+  bars = bars.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const last = bars[bars.length - 1];
+  const prev = bars[bars.length - 2];
+  let highPoint = -Infinity, highDate = "";
+  for (const b of bars) {
+    if (b.close > highPoint) { highPoint = b.close; highDate = b.date; }
+  }
+  const drawdown = (last.close - highPoint) / highPoint * 100;
+  const recovery = (highPoint - last.close) / last.close * 100;
+  const dailyChangePct = (last.close - prev.close) / prev.close * 100;
+  const durationDays = Math.max(0, Math.round((new Date(last.date) - new Date(highDate)) / 86400000));
+  return {
+    highPoint, highDate, latestClose: last.close, latestDate: last.date,
+    dailyChangePct, drawdown, recovery, durationDays
+  };
+}
+
+// ====== 手动录入 ======
+function applyManual() {
+  const dateEl = document.getElementById("manualDate");
+  const closeEl = document.getElementById("manualClose");
+  const date = dateEl.value;
+  const close = parseFloat(closeEl.value);
+  if (!date || !isFinite(close) || close <= 0) {
+    alert("请输入有效日期和收盘价");
+    return;
+  }
+  const bars = loadCache().filter(b => b.date !== date);
+  bars.push({ date, close });
+  bars.sort((a, b) => a.date.localeCompare(b.date));
+  saveCache(bars);
+
+  const data = computeFromBars(bars);
+  updateSVG(data);
+  document.getElementById("sourceNote").textContent = "数据来源：手动录入";
+  document.getElementById("status").textContent = "已录入 " + date + " 收盘 " + close;
+  document.getElementById("status").className = "status";
+}
+
+// ====== 下载 ======
+function getSVGString() {
+  const svg = document.getElementById("card");
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  return new XMLSerializer().serializeToString(clone);
+}
+
+function downloadSVG() {
+  const blob = new Blob([getSVGString()], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "nasdaq100_monitor.svg";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadPNG() {
+  const width = 800, height = 1200, scale = 2;
+  const blob = new Blob([getSVGString()], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = function () {
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale; canvas.height = height * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale); ctx.drawImage(img, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(function (pngBlob) {
+      const pngUrl = URL.createObjectURL(pngBlob);
+      const a = document.createElement("a");
+      a.href = pngUrl; a.download = "nasdaq100_monitor.png";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(pngUrl);
+    }, "image/png");
+  };
+  img.onerror = function () { URL.revokeObjectURL(url); alert("PNG 导出失败，请改用 SVG。"); };
+  img.src = url;
+}
+
+// ====== 页面加载 ======
+window.addEventListener("load", () => {
+  document.getElementById("manualDate").value = new Date().toISOString().slice(0, 10);
+  refreshData();
+});
+</script>
+</body>
+</html>
