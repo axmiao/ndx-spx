@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { fmtNum, fmtPct } from '../utils/format'
 import { downloadSvg, downloadPng } from '../utils/download'
 
@@ -12,6 +12,8 @@ const props = defineProps({
 })
 
 const svgRef = ref(null)
+const previewOpen = ref(false)
+const previewContainer = ref(null)
 
 const drawdownText = computed(() => Number(props.metrics.drawdown).toFixed(2) + '%')
 const recoveryText = computed(() => Number(props.metrics.recovery).toFixed(2) + '%')
@@ -35,6 +37,35 @@ function onDownloadSvg() {
 function onDownloadPng() {
   downloadPng(svgRef.value, 'index_monitor.png')
 }
+
+function openPreview() {
+  previewOpen.value = true
+  document.body.style.overflow = 'hidden'
+  nextTick(() => {
+    if (previewContainer.value && svgRef.value) {
+      previewContainer.value.innerHTML = ''
+      const clone = svgRef.value.cloneNode(true)
+      clone.setAttribute('class', 'block w-full h-auto')
+      previewContainer.value.appendChild(clone)
+    }
+  })
+}
+
+function closePreview() {
+  previewOpen.value = false
+  document.body.style.overflow = ''
+  if (previewContainer.value) previewContainer.value.innerHTML = ''
+}
+
+function onKeydown(e) {
+  if (e.key === 'Escape' && previewOpen.value) closePreview()
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -51,6 +82,12 @@ function onDownloadPng() {
         @click="onDownloadPng"
       >
         下载 PNG
+      </button>
+      <button
+        class="px-6 py-2.5 border border-gold rounded-lg bg-navy-card text-gold font-bold text-sm hover:bg-gold hover:text-navy-bg transition-colors"
+        @click="openPreview"
+      >
+        预览图片
       </button>
     </div>
 
@@ -74,7 +111,7 @@ function onDownloadPng() {
         </defs>
         <rect width="800" height="1200" fill="url(#bg)" />
 
-        <text x="400" y="78" text-anchor="middle" font-size="40" font-weight="bold" fill="#FFD700"
+        <text x="400" y="78" text-anchor="middle" font-size="52" font-weight="bold" fill="#FFD700"
               font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
           {{ title }}
         </text>
@@ -92,34 +129,54 @@ function onDownloadPng() {
 
         <g filter="url(#shadow)">
           <rect x="70" y="356" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="410" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
+          <text x="400" y="410" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
           <text x="400" y="474" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
         </g>
 
         <g filter="url(#shadow)">
           <rect x="70" y="532" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="586" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
+          <text x="400" y="586" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
           <text x="400" y="650" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ durationText }}</text>
         </g>
 
         <g filter="url(#shadow)">
           <rect x="70" y="708" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="762" text-anchor="middle" font-size="22" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
+          <text x="400" y="762" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
           <text x="400" y="826" text-anchor="middle" font-size="46" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
-          <text x="400" y="848" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.7" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+          <text x="400" y="848" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.7" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
         </g>
 
         <rect x="70" y="888" width="660" height="130" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5" />
-        <text x="400" y="918" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
-        <text x="400" y="948" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
-        <text x="400" y="978" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
-        <text x="400" y="1006" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
+        <text x="400" y="918" text-anchor="middle" font-size="20" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
+        <text x="400" y="948" text-anchor="middle" font-size="20" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
+        <text x="400" y="978" text-anchor="middle" font-size="20" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
+        <text x="400" y="1006" text-anchor="middle" font-size="20" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
 
         <line x1="120" y1="1058" x2="680" y2="1058" stroke="#FFD700" stroke-width="1" opacity="0.25" />
-        <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
-        <text x="400" y="1122" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">自动获取经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
-        <text x="400" y="1152" text-anchor="middle" font-size="12" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">指数指标监控 · 仅供参考，不构成投资建议</text>
+        <text x="400" y="1092" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
+        <text x="400" y="1122" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">自动获取经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
+        <text x="400" y="1152" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">指数指标监控 · 仅供参考，不构成投资建议</text>
       </svg>
     </div>
+
+    <!-- 全屏预览层 -->
+    <Teleport to="body">
+      <div
+        v-if="previewOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+        @click.self="closePreview"
+      >
+        <div class="relative w-full max-w-[min(92vw,720px)] max-h-[92vh] overflow-auto rounded-xl">
+          <button
+            class="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-black/60 text-gold text-xl leading-none flex items-center justify-center hover:bg-gold hover:text-navy-bg transition-colors"
+            @click="closePreview"
+            aria-label="关闭预览"
+          >
+            ×
+          </button>
+          <div ref="previewContainer" class="w-full"></div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
