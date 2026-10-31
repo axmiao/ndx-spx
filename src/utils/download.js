@@ -18,7 +18,7 @@ export function downloadSvg(svgEl, filename = 'monitor.svg') {
   URL.revokeObjectURL(url)
 }
 
-export function downloadPng(svgEl, filename = 'monitor.png', width = 800, height = 1728, scale = 2) {
+export function downloadPng(svgEl, filename = 'monitor.png', width = 800, height = 1200, scale = 2) {
   const blob = new Blob([getSvgString(svgEl)], {
     type: 'image/svg+xml;charset=utf-8'
   })
