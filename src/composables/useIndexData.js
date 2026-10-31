@@ -19,6 +19,27 @@ function saveCache(bars) {
   localStorage.setItem(CACHE_KEY, JSON.stringify(bars))
 }
 
+// 计算 YTD：当年第一个交易日收盘 → 最新收盘
+function calcYtd(bars) {
+  if (!bars || bars.length < 2) return 0
+  const last = bars[bars.length - 1]
+  const lastYear = new Date(last.t * 1000).getUTCFullYear()
+  const firstOfYear = bars.find(b => new Date(b.t * 1000).getUTCFullYear() === lastYear)
+  if (!firstOfYear || firstOfYear.c <= 0) return 0
+  return ((last.c - firstOfYear.c) / firstOfYear.c) * 100
+}
+
+// 本地缓存版（bars 为 {date, close}）
+function calcYtdFromCache(bars) {
+  if (!bars || bars.length < 2) return 0
+  const sorted = bars.slice().sort((a, b) => a.date.localeCompare(b.date))
+  const last = sorted[sorted.length - 1]
+  const lastYear = new Date(last.date).getUTCFullYear()
+  const firstOfYear = sorted.find(b => new Date(b.date).getUTCFullYear() === lastYear)
+  if (!firstOfYear || firstOfYear.close <= 0) return 0
+  return ((last.close - firstOfYear.close) / firstOfYear.close) * 100
+}
+
 export function useIndexData() {
   const metrics = ref({
     highPoint: 0,
@@ -28,7 +49,8 @@ export function useIndexData() {
     dailyChangePct: 0,
     drawdown: 0,
     recovery: 0,
-    durationDays: 0
+    durationDays: 0,
+    ytd: 0
   })
   const status = ref('')
   const statusError = ref(false)
@@ -108,6 +130,9 @@ export function useIndexData() {
     const latestTs = bars[bars.length - 1].t
     const durationDays = Math.max(0, Math.round((latestTs - highTs) / 86400))
 
+    // YTD
+    const ytd = calcYtd(bars)
+
     return {
       highPoint,
       highDate,
@@ -116,7 +141,8 @@ export function useIndexData() {
       dailyChangePct,
       drawdown,
       recovery,
-      durationDays
+      durationDays,
+      ytd
     }
   }
 
@@ -139,6 +165,7 @@ export function useIndexData() {
       0,
       Math.round((new Date(last.date) - new Date(highDate)) / 86400000)
     )
+    const ytd = calcYtdFromCache(sorted)
     return {
       highPoint,
       highDate,
@@ -147,7 +174,8 @@ export function useIndexData() {
       dailyChangePct,
       drawdown,
       recovery,
-      durationDays
+      durationDays,
+      ytd
     }
   }
 

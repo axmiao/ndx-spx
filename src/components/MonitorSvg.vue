@@ -22,6 +22,11 @@ const highText = computed(
   () => '历史收盘最高点 ' + fmtNum(props.metrics.highPoint) + '（' + props.metrics.highDate + '）'
 )
 
+const ytdText = computed(() => {
+  const v = Number(props.metrics.ytd)
+  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'
+})
+
 defineExpose({ svgRef })
 
 function onDownloadSvg() {
@@ -105,9 +110,10 @@ function onDownloadPng() {
         </g>
 
         <rect x="70" y="888" width="660" height="130" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5" />
-        <text x="400" y="922" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
-        <text x="400" y="956" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
-        <text x="400" y="990" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
+        <text x="400" y="918" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
+        <text x="400" y="948" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
+        <text x="400" y="978" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
+        <text x="400" y="1006" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
 
         <line x1="120" y1="1058" x2="680" y2="1058" stroke="#FFD700" stroke-width="1" opacity="0.25" />
         <text x="400" y="1092" text-anchor="middle" font-size="13" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
