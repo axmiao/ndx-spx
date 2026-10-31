@@ -142,7 +142,7 @@ onUnmounted(() => {
         <g filter="url(#shadow)">
           <rect x="70" y="708" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
           <text x="400" y="762" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
-          <text x="400" y="826" text-anchor="middle" font-size="46" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
+          <text x="400" y="816" text-anchor="middle" font-size="46" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
           <text x="400" y="848" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.7" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
         </g>
 
