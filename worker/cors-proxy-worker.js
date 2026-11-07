@@ -9,7 +9,7 @@ const ALLOWED_TARGETS = [
 ];
 
 function originAllowed(origin) {
-  if (!origin) return false;
+  if (!origin) return true;
   return ALLOWED_ORIGINS.some(o => origin === o || origin.endsWith(o));
 }
 
