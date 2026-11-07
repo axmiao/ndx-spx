@@ -1,8 +1,7 @@
 import { ref } from 'vue'
 
-const WORKER_URL = 'https://ndx-proxy.bugvsdebug.workers.dev'
-
-const FALLBACK = {
+// 本地静态列表：不依赖网络，国内直接可用
+const STATIC_LIST = {
   indices: [
     { symbol: '^NDX', name: '纳斯达克100' },
     { symbol: '^GSPC', name: '标普500' }
@@ -24,20 +23,12 @@ export function useIndexList() {
 
   async function load() {
     loading.value = true
-    try {
-      const resp = await fetch(`${WORKER_URL}/list`)
-      if (!resp.ok) throw new Error('HTTP ' + resp.status)
-      const data = await resp.json()
-      categories.value = {
-        indices: data.indices || [],
-        stocks: data.stocks || []
-      }
-    } catch (e) {
-      console.warn('列表加载失败，使用回退列表：', e.message)
-      categories.value = FALLBACK
-    } finally {
-      loading.value = false
+    // 直接使用本地列表，无需请求
+    categories.value = {
+      indices: [...STATIC_LIST.indices],
+      stocks: [...STATIC_LIST.stocks]
     }
+    loading.value = false
   }
 
   return { categories, loading, load }
