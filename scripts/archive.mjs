@@ -7,7 +7,7 @@ const SYMBOLS = ['^NDX', '^GSPC']
 const ARCHIVE_DIR = 'public/archive'
 
 async function fetchBars(symbol) {
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1d`
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1mo&interval=1d`
   const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(target)}`
   const resp = await fetch(proxyUrl)
   if (!resp.ok) throw new Error(`Worker HTTP ${resp.status} for ${symbol}`)
