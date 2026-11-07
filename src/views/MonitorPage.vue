@@ -17,7 +17,7 @@ const {
 
 const selectedSymbol = ref('^NDX')
 const asOfDate = ref('')
-const compareSymbols = ref([])   // 多选对比标的
+const compareSymbols = ref([])
 
 const allItems = computed(() => [
   ...(categories.value.indices || []),
@@ -41,7 +41,6 @@ const maxDrawdownText = computed(() => {
   return '个股最大回撤请参考本地缓存计算'
 })
 
-// 对比可选项：排除主标的
 const compareOptions = computed(() => {
   const groups = []
   const indices = (categories.value.indices || []).filter(i => i.symbol !== selectedSymbol.value)
@@ -67,6 +66,71 @@ function toggleCompare(symbol) {
 function clearCompare() {
   compareSymbols.value = []
   compareData.value = []
+}
+
+// ====== 日期快捷按钮 ======
+function toDateStr(d) {
+  return d.toISOString().slice(0, 10)
+}
+
+const shortcuts = [
+  {
+    label: '昨天',
+    getDate: () => {
+      const d = new Date()
+      d.setDate(d.getDate() - 1)
+      return toDateStr(d)
+    }
+  },
+  {
+    label: '上周',
+    getDate: () => {
+      const d = new Date()
+      d.setDate(d.getDate() - 7)
+      return toDateStr(d)
+    }
+  },
+  {
+    label: '上月',
+    getDate: () => {
+      const d = new Date()
+      d.setMonth(d.getMonth() - 1)
+      return toDateStr(d)
+    }
+  },
+  {
+    label: '年初',
+    getDate: () => {
+      const y = new Date().getFullYear()
+      return `${y}-01-01`
+    }
+  },
+  {
+    label: '52周低点',
+    getDate: () => {
+      // 用当前主标的的 series 找近52周最低点日期；没有 series 时回退为一年前
+      const s = series.value
+      if (s && s.length) {
+        const oneYearAgo = Date.now() / 1000 - 365 * 86400
+        const recent = s.filter(p => p.t >= oneYearAgo)
+        if (recent.length) {
+          let min = recent[0]
+          for (const p of recent) if (p.dd < min.dd) min = p
+          // series 里存的是回撤，低点对应回撤最深的那天
+          // 需要从 bars 拿日期，这里用回撤点的时间戳近似
+          return toDateStr(new Date(min.t * 1000))
+        }
+      }
+      const d = new Date()
+      d.setDate(d.getDate() - 365)
+      return toDateStr(d)
+    }
+  }
+]
+
+async function onShortcut(item) {
+  asOfDate.value = item.getDate()
+  await refresh(selectedSymbol.value, asOfDate.value, compareSymbols.value)
 }
 
 async function onSymbolChange() {
@@ -104,29 +168,43 @@ onMounted(async () => {
       @change="onSymbolChange"
     />
 
-    <div class="flex flex-wrap gap-2 justify-center items-center w-full max-w-2xl">
-      <label class="text-gold text-sm">历史日期：</label>
-      <input
-        v-model="asOfDate"
-        type="date"
-        class="px-3 py-2 rounded-md border border-gold/30 bg-navy-bg text-gold text-sm"
-      />
-      <button
-        class="px-4 py-2 rounded-md border border-gold bg-navy-card text-gold text-sm hover:bg-gold hover:text-navy-bg transition-colors"
-        @click="onViewHistory"
-      >
-        查看该日
-      </button>
-      <button
-        v-if="isHistorical"
-        class="px-4 py-2 rounded-md border border-gold/50 bg-navy-card/60 text-gold/80 text-sm hover:bg-gold hover:text-navy-bg transition-colors"
-        @click="onBackToLatest"
-      >
-        回到最新
-      </button>
+    <!-- 日期选择 + 快捷按钮 -->
+    <div class="w-full max-w-2xl flex flex-col gap-2">
+      <div class="flex flex-wrap gap-2 justify-center items-center">
+        <label class="text-gold text-sm">历史日期：</label>
+        <input
+          v-model="asOfDate"
+          type="date"
+          class="px-3 py-2 rounded-md border border-gold/30 bg-navy-bg text-gold text-sm"
+        />
+        <button
+          class="px-4 py-2 rounded-md border border-gold bg-navy-card text-gold text-sm hover:bg-gold hover:text-navy-bg transition-colors"
+          @click="onViewHistory"
+        >
+          查看该日
+        </button>
+        <button
+          v-if="isHistorical"
+          class="px-4 py-2 rounded-md border border-gold/50 bg-navy-card/60 text-gold/80 text-sm hover:bg-gold hover:text-navy-bg transition-colors"
+          @click="onBackToLatest"
+        >
+          回到最新
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-2 justify-center">
+        <button
+          v-for="s in shortcuts"
+          :key="s.label"
+          class="px-3 py-1.5 rounded-md border border-gold/40 bg-navy-bg/60 text-gold/85 text-xs hover:bg-gold hover:text-navy-bg transition-colors"
+          @click="onShortcut(s)"
+        >
+          {{ s.label }}
+        </button>
+      </div>
     </div>
 
-    <!-- 对比标的：checkbox 列表 -->
+    <!-- 对比标的 -->
     <div class="w-full max-w-2xl bg-navy-card/40 border border-gold/30 rounded-xl p-3">
       <div class="flex items-center justify-between mb-2">
         <span class="text-gold text-sm font-bold">对比标的（最多3个）</span>
