@@ -17,7 +17,7 @@ const {
 
 const selectedSymbol = ref('^NDX')
 const asOfDate = ref('')
-const compareSymbols = ref([])   // 多选：对比标的
+const compareSymbols = ref([])   // 多选对比标的
 
 const allItems = computed(() => [
   ...(categories.value.indices || []),
@@ -41,7 +41,7 @@ const maxDrawdownText = computed(() => {
   return '个股最大回撤请参考本地缓存计算'
 })
 
-// 对比下拉框可选项：排除主标的
+// 对比可选项：排除主标的
 const compareOptions = computed(() => {
   const groups = []
   const indices = (categories.value.indices || []).filter(i => i.symbol !== selectedSymbol.value)
@@ -51,14 +51,25 @@ const compareOptions = computed(() => {
   return groups
 })
 
-function onCompareChange(e) {
-  const selected = Array.from(e.target.selectedOptions).map(o => o.value)
-  // 最多 3 个
-  compareSymbols.value = selected.slice(0, 3)
+function toggleCompare(symbol) {
+  const idx = compareSymbols.value.indexOf(symbol)
+  if (idx >= 0) {
+    compareSymbols.value.splice(idx, 1)
+  } else {
+    if (compareSymbols.value.length >= 3) {
+      alert('最多选择 3 个对比标的')
+      return
+    }
+    compareSymbols.value.push(symbol)
+  }
+}
+
+function clearCompare() {
+  compareSymbols.value = []
+  compareData.value = []
 }
 
 async function onSymbolChange() {
-  // 主标的切换后，清理已选对比中与新主标的重复的项
   compareSymbols.value = compareSymbols.value.filter(s => s !== selectedSymbol.value)
   await refresh(selectedSymbol.value, asOfDate.value || null, compareSymbols.value)
 }
@@ -115,29 +126,55 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div class="flex flex-wrap gap-2 justify-center items-center w-full max-w-2xl">
-      <label class="text-gold text-sm">对比标的（最多3个）：</label>
-      <select
-        multiple
-        :value="compareSymbols"
-        class="px-3 py-2 rounded-md border border-gold/30 bg-navy-bg text-gold text-sm min-w-[260px] h-24"
-        @change="onCompareChange"
-      >
-        <optgroup v-for="g in compareOptions" :key="g.label" :label="g.label">
-          <option v-for="item in g.options" :key="item.symbol" :value="item.symbol">
-            {{ item.name }}（{{ item.symbol }}）
-          </option>
-        </optgroup>
-      </select>
-      <button
-        class="px-4 py-2 rounded-md border border-gold bg-navy-card text-gold text-sm hover:bg-gold hover:text-navy-bg transition-colors"
-        @click="onLoadCompare"
-      >
-        加载对比
-      </button>
-      <span class="text-gold/60 text-xs">
+    <!-- 对比标的：checkbox 列表 -->
+    <div class="w-full max-w-2xl bg-navy-card/40 border border-gold/30 rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-gold text-sm font-bold">对比标的（最多3个）</span>
+        <div class="flex gap-2">
+          <button
+            class="px-3 py-1 rounded-md border border-gold bg-navy-card text-gold text-xs hover:bg-gold hover:text-navy-bg transition-colors"
+            @click="onLoadCompare"
+          >
+            加载对比
+          </button>
+          <button
+            class="px-3 py-1 rounded-md border border-gold/50 bg-navy-card/60 text-gold/80 text-xs hover:bg-gold hover:text-navy-bg transition-colors"
+            :disabled="!compareSymbols.length"
+            @click="clearCompare"
+          >
+            清除对比
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <div v-for="g in compareOptions" :key="g.label">
+          <div class="text-gold/60 text-xs mb-1">{{ g.label }}</div>
+          <div class="flex flex-wrap gap-2">
+            <label
+              v-for="item in g.options"
+              :key="item.symbol"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors"
+              :class="compareSymbols.includes(item.symbol)
+                ? 'border-gold bg-gold/15 text-gold'
+                : 'border-gold/25 bg-navy-bg/60 text-gold/70'"
+            >
+              <input
+                type="checkbox"
+                class="accent-yellow-400"
+                :checked="compareSymbols.includes(item.symbol)"
+                @change="toggleCompare(item.symbol)"
+              />
+              <span>{{ item.name }}</span>
+              <span class="text-gold/40">{{ item.symbol }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-gold/60 text-xs mt-2">
         已选：{{ compareSymbols.length ? compareSymbols.join(', ') : '无' }}
-      </span>
+      </div>
     </div>
 
     <div class="text-sm text-center min-h-[20px]" :class="statusError ? 'text-red-400' : 'text-gold'">
