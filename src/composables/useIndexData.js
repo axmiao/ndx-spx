@@ -43,21 +43,26 @@ function buildDrawdownSeries(bars) {
 // 回撤事件：从新高回撤 ≥ threshold 的区间
 function detectDrawdownEvents(bars, threshold = 5) {
   const events = []
-  let peak = -Infinity, peakBar = null
+  let peak = -Infinity          // 动态历史最高
+  let peakBar = null
   let inDrawdown = false
-  let trough = Infinity, troughBar = null
+  let peakBeforeDrawdown = -Infinity  // 回撤开始前的峰值，用于判断修复
+  let peakBeforeBar = null
+  let trough = Infinity
+  let troughBar = null
 
   for (const b of bars) {
     if (b.c >= peak) {
-      if (inDrawdown && troughBar && peakBar) {
+      // 创新高：如果之前在回撤中，说明已修复
+      if (inDrawdown && troughBar && peakBeforeBar) {
         events.push({
-          peakDate: fmtDate(peakBar.t),
-          peakClose: peakBar.c,
+          peakDate: fmtDate(peakBeforeBar.t),
+          peakClose: peakBeforeDrawdown,
           troughDate: fmtDate(troughBar.t),
-          troughClose: troughBar.c,
-          depth: ((trough - peak) / peak) * 100,
-          recovered: false,
-          recoveryDays: null
+          troughClose: trough,
+          depth: ((trough - peakBeforeDrawdown) / peakBeforeDrawdown) * 100,
+          recovered: true,
+          recoveryDays: Math.round((b.t - troughBar.t) / 86400)
         })
       }
       peak = b.c
@@ -67,30 +72,61 @@ function detectDrawdownEvents(bars, threshold = 5) {
       troughBar = null
       continue
     }
+
+    // 未创新高：计算相对当前峰值的回撤
     const dd = ((b.c - peak) / peak) * 100
-    if (!inDrawdown && dd <= -threshold) {
-      inDrawdown = true
-      trough = b.c
-      troughBar = b
-    } else if (inDrawdown && b.c < trough) {
-      trough = b.c
-      troughBar = b
+
+    if (!inDrawdown) {
+      if (dd <= -threshold) {
+        // 进入回撤
+        inDrawdown = true
+        peakBeforeDrawdown = peak
+        peakBeforeBar = peakBar
+        trough = b.c
+        troughBar = b
+      }
+    } else {
+      // 已在回撤中：更新谷底
+      if (b.c < trough) {
+        trough = b.c
+        troughBar = b
+      }
+      // 检查是否回到回撤前峰值（修复）
+      if (b.c >= peakBeforeDrawdown) {
+        events.push({
+          peakDate: fmtDate(peakBeforeBar.t),
+          peakClose: peakBeforeDrawdown,
+          troughDate: fmtDate(troughBar.t),
+          troughClose: trough,
+          depth: ((trough - peakBeforeDrawdown) / peakBeforeDrawdown) * 100,
+          recovered: true,
+          recoveryDays: Math.round((b.t - troughBar.t) / 86400)
+        })
+        inDrawdown = false
+        trough = Infinity
+        troughBar = null
+        // 修复后，如果当前价成为新峰值，更新 peak
+        if (b.c >= peak) {
+          peak = b.c
+          peakBar = b
+        }
+      }
     }
   }
-  if (inDrawdown && troughBar && peakBar) {
-    const last = bars[bars.length - 1]
+
+  // 处理最后一段未修复的回撤
+  if (inDrawdown && troughBar && peakBeforeBar) {
     events.push({
-      peakDate: fmtDate(peakBar.t),
-      peakClose: peakBar.c,
+      peakDate: fmtDate(peakBeforeBar.t),
+      peakClose: peakBeforeDrawdown,
       troughDate: fmtDate(troughBar.t),
-      troughClose: troughBar.c,
-      depth: ((trough - peak) / peak) * 100,
-      recovered: last.c >= peak,
-      recoveryDays: last.c >= peak
-        ? Math.round((last.t - peakBar.t) / 86400)
-        : null
+      troughClose: trough,
+      depth: ((trough - peakBeforeDrawdown) / peakBeforeDrawdown) * 100,
+      recovered: false,
+      recoveryDays: null
     })
   }
+
   return events
 }
 
