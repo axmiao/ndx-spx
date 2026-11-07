@@ -5,6 +5,7 @@ const WORKER_URL = 'https://ndx-proxy.bugvsdebug.workers.dev'
 const RANGE = '5y'
 const INTERVAL = '1d'
 const CACHE_KEY = 'index_bars_v1'
+const ARCHIVE_BASE = '/ndx-spx/archive'   // 与 vite.config.js 的 base 保持一致
 
 function loadCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]') } catch { return [] }
@@ -31,7 +32,6 @@ function calcYtdFromCache(bars) {
   return ((last.close - firstOfYear.close) / firstOfYear.close) * 100
 }
 
-// 回撤曲线：每天相对此前历史高点的回撤百分比
 function buildDrawdownSeries(bars) {
   let peak = -Infinity
   return bars.map(b => {
@@ -40,20 +40,18 @@ function buildDrawdownSeries(bars) {
   })
 }
 
-// 回撤事件：从新高回撤 ≥ threshold 的区间
 function detectDrawdownEvents(bars, threshold = 5) {
   const events = []
-  let peak = -Infinity          // 动态历史最高
+  let peak = -Infinity
   let peakBar = null
   let inDrawdown = false
-  let peakBeforeDrawdown = -Infinity  // 回撤开始前的峰值，用于判断修复
+  let peakBeforeDrawdown = -Infinity
   let peakBeforeBar = null
   let trough = Infinity
   let troughBar = null
 
   for (const b of bars) {
     if (b.c >= peak) {
-      // 创新高：如果之前在回撤中，说明已修复
       if (inDrawdown && troughBar && peakBeforeBar) {
         events.push({
           peakDate: fmtDate(peakBeforeBar.t),
@@ -73,12 +71,10 @@ function detectDrawdownEvents(bars, threshold = 5) {
       continue
     }
 
-    // 未创新高：计算相对当前峰值的回撤
     const dd = ((b.c - peak) / peak) * 100
 
     if (!inDrawdown) {
       if (dd <= -threshold) {
-        // 进入回撤
         inDrawdown = true
         peakBeforeDrawdown = peak
         peakBeforeBar = peakBar
@@ -86,12 +82,10 @@ function detectDrawdownEvents(bars, threshold = 5) {
         troughBar = b
       }
     } else {
-      // 已在回撤中：更新谷底
       if (b.c < trough) {
         trough = b.c
         troughBar = b
       }
-      // 检查是否回到回撤前峰值（修复）
       if (b.c >= peakBeforeDrawdown) {
         events.push({
           peakDate: fmtDate(peakBeforeBar.t),
@@ -105,7 +99,6 @@ function detectDrawdownEvents(bars, threshold = 5) {
         inDrawdown = false
         trough = Infinity
         troughBar = null
-        // 修复后，如果当前价成为新峰值，更新 peak
         if (b.c >= peak) {
           peak = b.c
           peakBar = b
@@ -114,7 +107,6 @@ function detectDrawdownEvents(bars, threshold = 5) {
     }
   }
 
-  // 处理最后一段未修复的回撤
   if (inDrawdown && troughBar && peakBeforeBar) {
     events.push({
       peakDate: fmtDate(peakBeforeBar.t),
@@ -130,7 +122,6 @@ function detectDrawdownEvents(bars, threshold = 5) {
   return events
 }
 
-// 均线偏离与波动率
 function calcVolatility(bars) {
   if (!bars || bars.length < 2) {
     return { ma20Dev: 0, ma60Dev: 0, ma200Dev: 0, vol20: 0 }
@@ -145,7 +136,6 @@ function calcVolatility(bars) {
   const dev = (m) => (m && m > 0 ? ((last - m) / m) * 100 : 0)
   const ma20 = ma(20), ma60 = ma(60), ma200 = ma(200)
 
-  // 近20日年化波动率
   let vol20 = 0
   if (closes.length >= 21) {
     const rets = []
@@ -167,7 +157,7 @@ export function useIndexData() {
   const series = ref([])
   const events = ref([])
   const volatility = ref({ ma20Dev: 0, ma60Dev: 0, ma200Dev: 0, vol20: 0 })
-  const compareData = ref([]) // [{ symbol, label, series }]
+  const compareData = ref([])
   const status = ref('')
   const statusError = ref(false)
   const debug = ref('')
@@ -206,6 +196,18 @@ export function useIndexData() {
     return { bars, meta, rawCount: timestamps.length }
   }
 
+  async function fetchFromArchive(symbol) {
+    const code = symbol.replace('^', '')
+    const resp = await fetch(`${ARCHIVE_BASE}/${code}.json`)
+    if (!resp.ok) throw new Error('归档不存在')
+    const json = await resp.json()
+    if (!Array.isArray(json) || json.length < 2) throw new Error('归档数据不足')
+    return json.map(b => ({
+      t: Math.floor(new Date(b.date + 'T00:00:00Z').getTime() / 1000),
+      c: b.close
+    }))
+  }
+
   function computeAll(bars, meta, asOfDate) {
     let highPoint = -Infinity, highBar = null
     for (const b of bars) if (b.c > highPoint) { highPoint = b.c; highBar = b }
@@ -232,7 +234,7 @@ export function useIndexData() {
     const latestTs = bars[bars.length - 1].t
     const durationDays = Math.max(0, Math.round((latestTs - highTs) / 86400))
     const ytd = calcYtd(bars)
-    const recentCloses = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
+    const recent = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
 
     return {
       metrics: {
@@ -242,46 +244,53 @@ export function useIndexData() {
       series: buildDrawdownSeries(bars),
       events: detectDrawdownEvents(bars, 5),
       volatility: calcVolatility(bars),
-      recentCloses
+      recentCloses: recent
     }
+  }
+
+  function applyResult(result) {
+    metrics.value = result.metrics
+    series.value = result.series
+    events.value = result.events
+    volatility.value = result.volatility
+    recentCloses.value = result.recentCloses
   }
 
   async function refresh(symbol, asOfDate = null, compareSymbols = []) {
     statusError.value = false
     isHistorical.value = !!asOfDate
-    status.value = asOfDate ? `正在获取截至 ${asOfDate} 的历史数据…` : '正在通过 Worker 获取数据…'
+    status.value = asOfDate
+      ? `正在获取截至 ${asOfDate} 的历史数据…`
+      : '正在获取数据…'
     debug.value = ''
 
+    // 非历史模式：优先读归档
+    if (!asOfDate) {
+      try {
+        const archiveBars = await fetchFromArchive(symbol)
+        const result = computeAll(archiveBars, null, null)
+        applyResult(result)
+        sourceNote.value = '数据来源：每日归档（GitHub Actions 自动快照）'
+        status.value = `✅ 已读取归档，数据截止 ${result.metrics.latestDate}`
+        debug.value = `归档 ${archiveBars.length} 条`
+        await loadCompare(compareSymbols, asOfDate)
+        return
+      } catch (e) {
+        console.warn('归档读取失败，回退 Worker：', e.message)
+      }
+    }
+
+    // Worker 实时（历史模式或归档失败）
     try {
       const { bars, meta, rawCount } = await fetchBars(symbol, asOfDate)
       const result = computeAll(bars, meta, asOfDate)
-      metrics.value = result.metrics
-      series.value = result.series
-      events.value = result.events
-      volatility.value = result.volatility
-      recentCloses.value = result.recentCloses
+      applyResult(result)
       sourceNote.value = asOfDate
         ? `数据来源：Yahoo Finance（截至 ${asOfDate} 的历史快照）`
         : '数据来源：Yahoo Finance（近5年日线，经 Worker 代理）'
       status.value = `✅ ${asOfDate ? '历史快照' : '自动更新'}成功，数据截止 ${result.metrics.latestDate}`
       debug.value = `原始 ${rawCount} 条，有效 ${bars.length} 条；回撤事件 ${result.events.length} 个`
-
-      // 多标的对比
-      if (compareSymbols.length > 0) {
-        const results = await Promise.all(
-          compareSymbols.map(async (s) => {
-            try {
-              const { bars: cb } = await fetchBars(s, asOfDate)
-              return { symbol: s, label: s, series: buildDrawdownSeries(cb) }
-            } catch {
-              return null
-            }
-          })
-        )
-        compareData.value = results.filter(Boolean)
-      } else {
-        compareData.value = []
-      }
+      await loadCompare(compareSymbols, asOfDate)
     } catch (e) {
       console.warn('获取失败：', e.message)
       const bars = loadCache()
@@ -291,11 +300,7 @@ export function useIndexData() {
         const filtered = asOfDate ? mapped.filter(b => fmtDate(b.t) <= asOfDate) : mapped
         if (filtered.length >= 2) {
           const result = computeAll(filtered, null, asOfDate)
-          metrics.value = result.metrics
-          series.value = result.series
-          events.value = result.events
-          volatility.value = result.volatility
-          recentCloses.value = result.recentCloses
+          applyResult(result)
           sourceNote.value = '数据来源：本地缓存'
           statusError.value = true
           status.value = `⚠️ 获取失败（${e.message}），已用本地缓存。`
@@ -307,6 +312,24 @@ export function useIndexData() {
     }
   }
 
+  async function loadCompare(compareSymbols, asOfDate) {
+    if (!compareSymbols || compareSymbols.length === 0) {
+      compareData.value = []
+      return
+    }
+    const results = await Promise.all(
+      compareSymbols.map(async (s) => {
+        try {
+          const { bars: cb } = await fetchBars(s, asOfDate)
+          return { symbol: s, label: s, series: buildDrawdownSeries(cb) }
+        } catch {
+          return null
+        }
+      })
+    )
+    compareData.value = results.filter(Boolean)
+  }
+
   function applyManual({ date, close }) {
     if (!date || !isFinite(close) || close <= 0) { alert('请输入有效日期和收盘价'); return }
     const bars = loadCache().filter(b => b.date !== date)
@@ -315,11 +338,7 @@ export function useIndexData() {
     saveCache(bars)
     const mapped = bars.map(b => ({ t: new Date(b.date).getTime() / 1000, c: b.close }))
     const result = computeAll(mapped, null, null)
-    metrics.value = result.metrics
-    series.value = result.series
-    events.value = result.events
-    volatility.value = result.volatility
-    recentCloses.value = result.recentCloses
+    applyResult(result)
     sourceNote.value = '数据来源：手动录入'
     statusError.value = false
     isHistorical.value = false
