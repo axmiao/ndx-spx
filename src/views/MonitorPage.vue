@@ -11,7 +11,7 @@ import { Icon } from '@iconify/vue'
 
 const { categories, loading: listLoading, load } = useIndexList()
 const {
-  metrics, series, events, volatility, compareData,
+  metrics, series, events, volatility, compareData, recentCloses,
   status, statusError, debug, sourceNote, isHistorical,
   refresh, applyManual
 } = useIndexData()
