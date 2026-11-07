@@ -173,6 +173,7 @@ export function useIndexData() {
   const debug = ref('')
   const sourceNote = ref('')
   const isHistorical = ref(false)
+  const recentCloses = ref([])
 
   async function fetchBars(symbol, asOfDate) {
     const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${RANGE}&interval=${INTERVAL}`
@@ -231,6 +232,7 @@ export function useIndexData() {
     const latestTs = bars[bars.length - 1].t
     const durationDays = Math.max(0, Math.round((latestTs - highTs) / 86400))
     const ytd = calcYtd(bars)
+    const recentCloses = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
 
     return {
       metrics: {
@@ -239,7 +241,8 @@ export function useIndexData() {
       },
       series: buildDrawdownSeries(bars),
       events: detectDrawdownEvents(bars, 5),
-      volatility: calcVolatility(bars)
+      volatility: calcVolatility(bars),
+      recentCloses
     }
   }
 
@@ -256,6 +259,7 @@ export function useIndexData() {
       series.value = result.series
       events.value = result.events
       volatility.value = result.volatility
+      recentCloses.value = result.recentCloses
       sourceNote.value = asOfDate
         ? `数据来源：Yahoo Finance（截至 ${asOfDate} 的历史快照）`
         : '数据来源：Yahoo Finance（近5年日线，经 Worker 代理）'
@@ -291,6 +295,7 @@ export function useIndexData() {
           series.value = result.series
           events.value = result.events
           volatility.value = result.volatility
+          recentCloses.value = result.recentCloses
           sourceNote.value = '数据来源：本地缓存'
           statusError.value = true
           status.value = `⚠️ 获取失败（${e.message}），已用本地缓存。`
@@ -314,6 +319,7 @@ export function useIndexData() {
     series.value = result.series
     events.value = result.events
     volatility.value = result.volatility
+    recentCloses.value = result.recentCloses
     sourceNote.value = '数据来源：手动录入'
     statusError.value = false
     isHistorical.value = false
@@ -321,7 +327,7 @@ export function useIndexData() {
   }
 
   return {
-    metrics, series, events, volatility, compareData,
+    metrics, series, events, volatility, recentCloses, compareData,
     status, statusError, debug, sourceNote, isHistorical,
     refresh, applyManual
   }

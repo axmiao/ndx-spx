@@ -7,6 +7,7 @@ import DrawdownChart from '../components/DrawdownChart.vue'
 import DrawdownEvents from '../components/DrawdownEvents.vue'
 import { useIndexList } from '../composables/useIndexList'
 import { useIndexData } from '../composables/useIndexData'
+import { Icon } from '@iconify/vue'
 
 const { categories, loading: listLoading, load } = useIndexList()
 const {
@@ -14,6 +15,12 @@ const {
   status, statusError, debug, sourceNote, isHistorical,
   refresh, applyManual
 } = useIndexData()
+
+const theme = ref(localStorage.getItem('monitor_theme') || 'dark')
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('monitor_theme', theme.value)
+}
 
 const selectedSymbol = ref('^NDX')
 const asOfDate = ref('')
@@ -161,6 +168,18 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col items-center gap-4 px-4 py-8 w-full">
+    <!-- 主题切换小图标 -->
+    <button
+      class="fixed top-3 right-3 z-40 w-9 h-9 rounded-full border border-gold/30 bg-navy-bg/70 backdrop-blur text-gold/80 flex items-center justify-center shadow-lg hover:bg-gold hover:text-navy-bg hover:border-gold transition-all duration-200"
+      :title="theme === 'dark' ? '切换到浅色' : '切换到深色'"
+      @click="toggleTheme"
+    >
+      <Icon
+        :icon="theme === 'dark' ? 'mdi:weather-sunny' : 'mdi:weather-night'"
+        width="16"
+        height="16"
+      />
+    </button>
     <IndexSelector
       v-model="selectedSymbol"
       :categories="categories"
@@ -269,8 +288,10 @@ onMounted(async () => {
       :symbol-label="'代码 ' + selectedSymbol"
       :metrics="metrics"
       :volatility="volatility"
+      :recent-closes="recentCloses"
       :source-note="sourceNote"
       :max-drawdown-text="maxDrawdownText"
+      :theme="theme"
     />
 
     <DrawdownChart :series="series" :compare-data="compareData" />

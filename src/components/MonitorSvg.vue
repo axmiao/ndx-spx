@@ -8,13 +8,51 @@ const props = defineProps({
   symbolLabel: { type: String, default: '' },
   metrics: { type: Object, required: true },
   volatility: { type: Object, default: () => ({}) },
+  recentCloses: { type: Array, default: () => [] },
   sourceNote: { type: String, default: '' },
-  maxDrawdownText: { type: String, default: '' }
+  maxDrawdownText: { type: String, default: '' },
+  theme: { type: String, default: 'dark' }
 })
 
 const svgRef = ref(null)
 const previewOpen = ref(false)
 const previewContainer = ref(null)
+
+// ====== 主题 ======
+const palette = computed(() => props.theme === 'light'
+  ? {
+      bgFrom: '#eef2ff',
+      bgTo: '#c7d2fe',
+      card: '#ffffff',
+      cardOpacity: 0.72,
+      border: '#6366f1',
+      text: '#312e81',
+      textDim: '#4338ca',
+      dimOpacity: 0.7,
+      grid: '#6366f1',
+      accent: '#06b6d4'
+    }
+  : {
+      bgFrom: '#0a1628',
+      bgTo: '#1a3a6b',
+      card: '#1a3a6b',
+      cardOpacity: 0.55,
+      border: '#FFD700',
+      text: '#FFD700',
+      textDim: '#FFD700',
+      dimOpacity: 0.7,
+      grid: '#FFD700',
+      accent: '#FFD700'
+    })
+// ====== 回撤深度色阶 ======
+const drawdownColor = computed(() => {
+  const dd = Number(props.metrics.drawdown)
+  const light = props.theme === 'light'
+  if (dd >= -5) return light ? '#059669' : '#4ade80'
+  if (dd >= -10) return light ? '#ca8a04' : '#FFD700'
+  if (dd >= -20) return light ? '#ea580c' : '#fb923c'
+  return light ? '#dc2626' : '#f87171'
+})
 
 const drawdownText = computed(() => Number(props.metrics.drawdown).toFixed(2) + '%')
 const recoveryText = computed(() => Number(props.metrics.recovery).toFixed(2) + '%')
@@ -32,6 +70,20 @@ const volText = computed(() => {
   const v = props.volatility || {}
   const f = (n) => (n >= 0 ? '+' : '') + Number(n).toFixed(2) + '%'
   return `20日波动 ${Number(v.vol20 || 0).toFixed(1)}% ｜ 20/60/200日均线偏离 ${f(v.ma20Dev || 0)} / ${f(v.ma60Dev || 0)} / ${f(v.ma200Dev || 0)}`
+})
+
+// ====== 迷你走势图路径 ======
+const sparkline = computed(() => {
+  const data = props.recentCloses || []
+  if (data.length < 2) return null
+  const w = 220, h = 50
+  const xs = data.map((_, i) => (i / (data.length - 1)) * w)
+  const cs = data.map(d => d.c)
+  const min = Math.min(...cs), max = Math.max(...cs)
+  const ys = cs.map(c => h - ((c - min) / (max - min || 1)) * h)
+  const d = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')
+  const lastX = xs[xs.length - 1], lastY = ys[ys.length - 1]
+  return { d, lastX, lastY, w, h }
 })
 
 defineExpose({ svgRef })
@@ -82,8 +134,8 @@ onUnmounted(() => {
       <svg ref="svgRef" xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" class="block w-full h-auto">
         <defs>
           <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#0a1628" />
-            <stop offset="100%" stop-color="#1a3a6b" />
+            <stop offset="0%" :stop-color="palette.bgFrom" />
+            <stop offset="100%" :stop-color="palette.bgTo" />
           </linearGradient>
           <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
             <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.35" />
@@ -91,52 +143,60 @@ onUnmounted(() => {
         </defs>
         <rect width="800" height="1200" fill="url(#bg)" />
 
-        <text x="400" y="78" text-anchor="middle" font-size="52" font-weight="bold" fill="#FFD700"
+        <text x="400" y="78" text-anchor="middle" font-size="52" font-weight="bold" :fill="palette.text"
               font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ title }}</text>
-        <text x="400" y="122" text-anchor="middle" font-size="22" fill="#FFD700" opacity="0.75"
+        <text x="400" y="122" text-anchor="middle" font-size="22" :fill="palette.textDim" :opacity="palette.dimOpacity"
               font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
           {{ symbolLabel }} ｜ 数据截止：{{ metrics.latestDate }}
         </text>
-        <line x1="120" y1="150" x2="680" y2="150" stroke="#FFD700" stroke-width="1" opacity="0.35" />
+        <line x1="120" y1="150" x2="680" y2="150" :stroke="palette.grid" stroke-width="1" opacity="0.35" />
 
+        <!-- 卡片 1：当前回撤（色阶） -->
         <g filter="url(#shadow)">
-          <rect x="70" y="180" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="234" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
-          <text x="400" y="298" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ drawdownText }}</text>
+          <rect x="70" y="180" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+          <text x="400" y="234" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
+          <text x="400" y="298" text-anchor="middle" font-size="48" font-weight="bold" :fill="drawdownColor" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ drawdownText }}</text>
         </g>
 
         <g filter="url(#shadow)">
-          <rect x="70" y="356" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="410" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
-          <text x="400" y="474" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
+          <rect x="70" y="356" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+          <text x="400" y="410" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
+          <text x="400" y="474" text-anchor="middle" font-size="48" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
         </g>
 
         <g filter="url(#shadow)">
-          <rect x="70" y="532" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="586" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
-          <text x="400" y="650" text-anchor="middle" font-size="48" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ durationText }}</text>
+          <rect x="70" y="532" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+          <text x="400" y="586" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
+          <text x="400" y="650" text-anchor="middle" font-size="48" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ durationText }}</text>
         </g>
 
+        <!-- 卡片 4：最新收盘 + 迷你走势图 -->
         <g filter="url(#shadow)">
-          <rect x="70" y="708" width="660" height="150" rx="18" fill="#1a3a6b" fill-opacity="0.55" stroke="#FFD700" stroke-width="1.5" />
-          <text x="400" y="762" text-anchor="middle" font-size="28" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
-          <text x="400" y="816" text-anchor="middle" font-size="46" font-weight="bold" fill="#FFD700" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
-          <text x="400" y="848" text-anchor="middle" font-size="18" fill="#FFD700" opacity="0.7" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+          <rect x="70" y="708" width="660" height="170" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+          <text x="400" y="754" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
+          <text x="400" y="806" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
+          <text x="400" y="836" text-anchor="middle" font-size="18" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+
+          <!-- 迷你走势图 -->
+          <g v-if="sparkline" :transform="`translate(290, 846)`">
+            <rect x="0" y="0" :width="sparkline.w" :height="sparkline.h" fill="none" />
+            <path :d="sparkline.d" fill="none" :stroke="palette.accent" stroke-width="1.8" />
+            <circle :cx="sparkline.lastX" :cy="sparkline.lastY" r="3" :fill="palette.accent" />
+          </g>
         </g>
 
-        <!-- 辅助指标条：5 行 -->
-        <rect x="70" y="884" width="660" height="200" rx="14" fill="#1a3a6b" fill-opacity="0.35" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5" />
-        <text x="400" y="918" text-anchor="middle" font-size="19" fill="#FFD700" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
-        <text x="400" y="954" text-anchor="middle" font-size="19" fill="#FFD700" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
-        <text x="400" y="990" text-anchor="middle" font-size="19" fill="#FFD700" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
-        <text x="400" y="1026" text-anchor="middle" font-size="17" fill="#FFD700" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ volText }}</text>
-        <text x="400" y="1062" text-anchor="middle" font-size="16" fill="#FFD700" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
+        <!-- 辅助指标条 -->
+        <rect x="70" y="898" width="660" height="200" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
+        <text x="400" y="932" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
+        <text x="400" y="968" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
+        <text x="400" y="1004" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
+        <text x="400" y="1040" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ volText }}</text>
+        <text x="400" y="1076" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
 
-        <!-- 注脚 -->
-        <line x1="120" y1="1104" x2="680" y2="1104" stroke="#FFD700" stroke-width="1" opacity="0.25" />
-        <text x="400" y="1134" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
-        <text x="400" y="1162" text-anchor="middle" font-size="15" fill="#FFD700" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
-        <text x="400" y="1188" text-anchor="middle" font-size="14" fill="#FFD700" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">指数指标监控 · 仅供参考，不构成投资建议</text>
+        <line x1="120" y1="1118" x2="680" y2="1118" :stroke="palette.grid" stroke-width="1" opacity="0.25" />
+        <text x="400" y="1148" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
+        <text x="400" y="1176" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
+        <text x="400" y="1198" text-anchor="middle" font-size="14" :fill="palette.textDim" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">指数指标监控 · 仅供参考，不构成投资建议</text>
       </svg>
     </div>
 
