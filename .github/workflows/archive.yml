@@ -3,7 +3,7 @@ name: Daily Snapshot Archive
 on:
   schedule:
     # 美股收盘后：UTC 22:00（夏令时约对应美东 18:00，收盘后有余量）
-    - cron: '0 22 * * 1-5'
+    - cron: '7 22 * * 1-5'
   workflow_dispatch:
 
 permissions:
