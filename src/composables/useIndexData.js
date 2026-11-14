@@ -5,13 +5,24 @@ const WORKER_URL = 'https://ndx-proxy.bugvsdebug.workers.dev'
 const RANGE = '5y'
 const INTERVAL = '1d'
 const CACHE_KEY = 'index_bars_v1'
-const ARCHIVE_BASE = '/ndx-spx/archive'   // 与 vite.config.js 的 base 保持一致
+const ARCHIVE_BASE = '/ndx-spx/archive'
+const VIX_CACHE_PREFIX = 'vix_cache_v1_'
 
 function loadCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]') } catch { return [] }
 }
 function saveCache(bars) {
   localStorage.setItem(CACHE_KEY, JSON.stringify(bars))
+}
+
+function loadVixCache(symbol) {
+  try { return JSON.parse(localStorage.getItem(VIX_CACHE_PREFIX + symbol) || 'null') } catch { return null }
+}
+function saveVixCache(symbol, data) {
+  try { localStorage.setItem(VIX_CACHE_PREFIX + symbol, JSON.stringify(data)) } catch {}
+}
+function clearVixCache(symbol) {
+  try { localStorage.removeItem(VIX_CACHE_PREFIX + symbol) } catch {}
 }
 
 function calcYtd(bars) {
@@ -21,15 +32,6 @@ function calcYtd(bars) {
   const firstOfYear = bars.find(b => new Date(b.t * 1000).getUTCFullYear() === lastYear)
   if (!firstOfYear || firstOfYear.c <= 0) return 0
   return ((last.c - firstOfYear.c) / firstOfYear.c) * 100
-}
-function calcYtdFromCache(bars) {
-  if (!bars || bars.length < 2) return 0
-  const sorted = bars.slice().sort((a, b) => a.date.localeCompare(b.date))
-  const last = sorted[sorted.length - 1]
-  const lastYear = new Date(last.date).getUTCFullYear()
-  const firstOfYear = sorted.find(b => new Date(b.date).getUTCFullYear() === lastYear)
-  if (!firstOfYear || firstOfYear.close <= 0) return 0
-  return ((last.close - firstOfYear.close) / firstOfYear.close) * 100
 }
 
 function buildDrawdownSeries(bars) {
@@ -149,6 +151,109 @@ function calcVolatility(bars) {
   return { ma20Dev: dev(ma20), ma60Dev: dev(ma60), ma200Dev: dev(ma200), vol20 }
 }
 
+// 回撤分位数：历史已修复回撤中，比当前更深的比例（越大越深）
+function calcDrawdownPercentile(currentDrawdown, events) {
+  const closed = (events || []).filter(e => e.recovered)
+  if (closed.length === 0) return null
+  const depths = closed.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
+  const cur = Math.abs(currentDrawdown)
+  const deeper = depths.filter(d => d > cur).length
+  return (deeper / depths.length) * 100
+}
+
+// 恢复进度：从谷底反弹的幅度占“谷底到峰值”的比例
+function calcRecoveryProgress(bars) {
+  if (!bars || bars.length < 2) return null
+  let peakIdx = -1, peak = -Infinity
+  for (let i = 0; i < bars.length; i++) {
+    if (bars[i].c > peak) { peak = bars[i].c; peakIdx = i }
+  }
+  let trough = Infinity, troughIdx = -1
+  for (let i = peakIdx + 1; i < bars.length; i++) {
+    if (bars[i].c < trough) { trough = bars[i].c; troughIdx = i }
+  }
+  if (troughIdx === -1) return null
+  const last = bars[bars.length - 1].c
+  const denom = peak - trough
+  if (denom <= 0) return null
+  return ((last - trough) / denom) * 100
+}
+
+// 50/200 均线状态
+function calcMaState(bars) {
+  if (!bars || bars.length < 200) return { ma50: null, ma200: null, state: '数据不足' }
+  const closes = bars.map(b => b.c)
+  const ma = (n) => closes.slice(-n).reduce((a, b) => a + b, 0) / n
+  const ma50 = ma(50), ma200 = ma(200)
+  const last = closes[closes.length - 1]
+  let state = '震荡'
+  if (ma50 > ma200 && last > ma50) state = '多头排列'
+  else if (ma50 < ma200 && last < ma50) state = '空头排列'
+  else if (ma50 > ma200) state = '多头回调'
+  else state = '空头反弹'
+  return { ma50, ma200, state }
+}
+
+// 波动率指数：纳指100 用 VXN，标普500 用 VIX，其他不显示
+function vixSymbolFor(symbol) {
+  if (symbol === '^NDX') return { code: '%5EVXN', label: 'VXN' }
+  if (symbol === '^GSPC') return { code: '%5EVIX', label: 'VIX' }
+  return null
+}
+
+async function fetchVix(symbol) {
+  const cfg = vixSymbolFor(symbol)
+  if (!cfg) return null
+
+  // 1) 归档优先
+  try {
+    const resp = await fetch(`${ARCHIVE_BASE}/${cfg.label}.json`)
+    if (resp.ok) {
+      const json = await resp.json()
+      if (Array.isArray(json) && json.length >= 2) {
+        const last = json[json.length - 1]
+        const prev = json[json.length - 2]
+        if (last.close > 0 && prev.close > 0) {
+          return {
+            label: cfg.label,
+            value: last.close,
+            changePct: ((last.close - prev.close) / prev.close) * 100,
+            date: last.date,
+            updatedAt: Date.now()
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 2) Worker 实时
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${cfg.code}?range=1mo&interval=1d`
+  const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(target)}`
+  const resp = await fetch(proxyUrl)
+  if (!resp.ok) throw new Error('波动率指数 HTTP ' + resp.status)
+  const json = await resp.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) throw new Error('波动率指数结构异常')
+
+  const closes = result.indicators?.quote?.[0]?.close || []
+  const valid = []
+  for (let i = 0; i < closes.length; i++) {
+    const c = closes[i]
+    if (c != null && isFinite(c) && c > 0) valid.push({ t: result.timestamp[i], c })
+  }
+  if (valid.length < 2) throw new Error('波动率指数数据不足')
+
+  const last = valid[valid.length - 1]
+  const prev = valid[valid.length - 2]
+  return {
+    label: cfg.label,
+    value: last.c,
+    changePct: ((last.c - prev.c) / prev.c) * 100,
+    date: fmtDate(last.t),
+    updatedAt: Date.now()
+  }
+}
+
 export function useIndexData() {
   const metrics = ref({
     highPoint: 0, highDate: '', latestClose: 0, latestDate: '',
@@ -166,6 +271,7 @@ export function useIndexData() {
   const sourceNote = ref('')
   const isHistorical = ref(false)
   const recentCloses = ref([])
+  const vix = ref(null)
 
   async function fetchBars(symbol, asOfDate) {
     const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${RANGE}&interval=${INTERVAL}`
@@ -210,51 +316,6 @@ export function useIndexData() {
     }))
   }
 
-  // 当前回撤分位数：当前回撤深度在历史回撤事件中的位置
-  function calcDrawdownPercentile(currentDrawdown, events) {
-    const closed = (events || []).filter(e => e.recovered)
-    if (closed.length === 0) return null
-    const depths = closed.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
-    const cur = Math.abs(currentDrawdown)
-    const below = depths.filter(d => d <= cur).length
-    return (below / depths.length) * 100
-  }
-
-  // 恢复进度：从谷底反弹的幅度占“谷底到峰值”的比例
-  function calcRecoveryProgress(bars) {
-    if (!bars || bars.length < 2) return null
-    // 找最后一个峰值和其后的谷底
-    let peakIdx = -1, peak = -Infinity
-    for (let i = 0; i < bars.length; i++) {
-      if (bars[i].c > peak) { peak = bars[i].c; peakIdx = i }
-    }
-    // 峰值之后的最低点
-    let trough = Infinity, troughIdx = -1
-    for (let i = peakIdx + 1; i < bars.length; i++) {
-      if (bars[i].c < trough) { trough = bars[i].c; troughIdx = i }
-    }
-    if (troughIdx === -1) return null
-    const last = bars[bars.length - 1].c
-    const denom = peak - trough
-    if (denom <= 0) return null
-    return ((last - trough) / denom) * 100
-  }
-
-  // 50/200 均线状态
-  function calcMaState(bars) {
-    if (!bars || bars.length < 200) return { ma50: null, ma200: null, state: '数据不足' }
-    const closes = bars.map(b => b.c)
-    const ma = (n) => closes.slice(-n).reduce((a, b) => a + b, 0) / n
-    const ma50 = ma(50), ma200 = ma(200)
-    const last = closes[closes.length - 1]
-    let state = '震荡'
-    if (ma50 > ma200 && last > ma50) state = '多头排列'
-    else if (ma50 < ma200 && last < ma50) state = '空头排列'
-    else if (ma50 > ma200) state = '多头回调'
-    else state = '空头反弹'
-    return { ma50, ma200, state }
-  }
-
   function computeAll(bars, meta, asOfDate) {
     let highPoint = -Infinity, highBar = null
     for (const b of bars) if (b.c > highPoint) { highPoint = b.c; highBar = b }
@@ -284,18 +345,21 @@ export function useIndexData() {
     const recent = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
 
     const eventsForPercentile = detectDrawdownEvents(bars, 5)
-    const drawdownPercentile = calcDrawdownPercentile(drawdown, eventsForPercentile)
+    const lastEvent = eventsForPercentile[eventsForPercentile.length - 1]
+    const currentDepth = lastEvent && !lastEvent.recovered
+      ? Math.abs(lastEvent.depth)
+      : Math.abs(drawdown)
+    const drawdownPercentile = calcDrawdownPercentile(currentDepth, eventsForPercentile)
     const recoveryProgress = calcRecoveryProgress(bars)
     const maState = calcMaState(bars)
-
 
     return {
       metrics: {
         highPoint, highDate, latestClose, latestDate,
         dailyChangePct, drawdown, recovery, durationDays, ytd,
-        drawdownPercentile,          // 新增：0–100，null 表示无事件
-        recoveryProgress,            // 新增：0–100，null 表示无回撤
-        maState: maState.state,      // 新增：字符串
+        drawdownPercentile,
+        recoveryProgress,
+        maState: maState.state,
         ma50: maState.ma50,
         ma200: maState.ma200
       },
@@ -322,6 +386,23 @@ export function useIndexData() {
       : '正在获取数据…'
     debug.value = ''
 
+    // VIX/VXN 并行获取，不阻塞主流程
+    const vixPromise = (async () => {
+      try {
+        const fresh = await fetchVix(symbol)
+        if (fresh) {
+          vix.value = fresh
+          saveVixCache(symbol, fresh)
+        } else {
+          vix.value = null
+          clearVixCache(symbol)
+        }
+      } catch {
+        const cached = loadVixCache(symbol)
+        vix.value = cached || null
+      }
+    })()
+
     // 非历史模式：优先读归档
     if (!asOfDate) {
       try {
@@ -332,6 +413,7 @@ export function useIndexData() {
         status.value = `✅ 已读取归档，数据截止 ${result.metrics.latestDate}`
         debug.value = `归档 ${archiveBars.length} 条`
         await loadCompare(compareSymbols, asOfDate)
+        await vixPromise
         return
       } catch (e) {
         console.warn('归档读取失败，回退 Worker：', e.message)
@@ -349,6 +431,7 @@ export function useIndexData() {
       status.value = `✅ ${asOfDate ? '历史快照' : '自动更新'}成功，数据截止 ${result.metrics.latestDate}`
       debug.value = `原始 ${rawCount} 条，有效 ${bars.length} 条；回撤事件 ${result.events.length} 个`
       await loadCompare(compareSymbols, asOfDate)
+      await vixPromise
     } catch (e) {
       console.warn('获取失败：', e.message)
       const bars = loadCache()
@@ -362,11 +445,13 @@ export function useIndexData() {
           sourceNote.value = '数据来源：本地缓存'
           statusError.value = true
           status.value = `⚠️ 获取失败（${e.message}），已用本地缓存。`
+          await vixPromise
           return
         }
       }
       statusError.value = true
       status.value = `⚠️ 获取失败（${e.message}），无可用缓存。`
+      await vixPromise
     }
   }
 
@@ -404,7 +489,7 @@ export function useIndexData() {
   }
 
   return {
-    metrics, series, events, volatility, recentCloses, compareData,
+    metrics, series, events, volatility, recentCloses, compareData, vix,
     status, statusError, debug, sourceNote, isHistorical,
     refresh, applyManual
   }

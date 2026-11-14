@@ -3,11 +3,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 const WORKER_URL = 'https://ndx-proxy.bugvsdebug.workers.dev'
-const SYMBOLS = ['^NDX', '^GSPC']
+const SYMBOLS = ['^NDX', '^GSPC', '^VXN', '^VIX']
 const ARCHIVE_DIR = 'public/archive'
 
-async function fetchBars(symbol) {
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1mo&interval=1d`
+async function fetchBars(symbol, range) {
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`
   const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(target)}`
   const resp = await fetch(proxyUrl)
   if (!resp.ok) throw new Error(`Worker HTTP ${resp.status} for ${symbol}`)
@@ -44,18 +44,22 @@ async function main() {
       existing = JSON.parse(raw)
     } catch { /* 文件不存在，首次运行 */ }
 
-    const existingDates = new Set(existing.map(b => b.date))
-    const fresh = await fetchBars(symbol)
+    // 首次运行（文件不存在或为空）用 5y，之后用 1mo 增量
+    const isFirstRun = !Array.isArray(existing) || existing.length === 0
+    const range = isFirstRun ? '5y' : '1mo'
+
+    const existingDates = new Set((existing || []).map(b => b.date))
+    const fresh = await fetchBars(symbol, range)
     const added = fresh.filter(b => !existingDates.has(b.date))
 
     if (added.length === 0) {
-      console.log(`${symbol}: 无新数据，跳过`)
+      console.log(`${symbol}: 无新数据，跳过（当前 ${existing.length} 条）`)
       continue
     }
 
-    const merged = [...existing, ...added].sort((a, b) => a.date.localeCompare(b.date))
+    const merged = [...(existing || []), ...added].sort((a, b) => a.date.localeCompare(b.date))
     await fs.writeFile(file, JSON.stringify(merged, null, 2) + '\n', 'utf8')
-    console.log(`${symbol}: 新增 ${added.length} 条，总计 ${merged.length} 条`)
+    console.log(`${symbol}: ${isFirstRun ? '首次归档' : '增量'}新增 ${added.length} 条，总计 ${merged.length} 条`)
   }
 }
 

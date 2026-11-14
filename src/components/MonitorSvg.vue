@@ -11,7 +11,8 @@ const props = defineProps({
   recentCloses: { type: Array, default: () => [] },
   sourceNote: { type: String, default: '' },
   maxDrawdownText: { type: String, default: '' },
-  theme: { type: String, default: 'dark' }
+  theme: { type: String, default: 'dark' },
+  vix: { type: Object, default: null }
 })
 
 const svgRef = ref(null)
@@ -44,6 +45,7 @@ const palette = computed(() => props.theme === 'light'
       grid: '#FFD700',
       accent: '#FFD700'
     })
+
 // ====== 回撤深度色阶 ======
 const drawdownColor = computed(() => {
   const dd = Number(props.metrics.drawdown)
@@ -66,10 +68,14 @@ const ytdText = computed(() => {
 const highText = computed(
   () => '历史收盘最高点 ' + fmtNum(props.metrics.highPoint) + '（' + props.metrics.highDate + '）'
 )
-const volText = computed(() => {
-  const v = props.volatility || {}
-  const f = (n) => (n >= 0 ? '+' : '') + Number(n).toFixed(2) + '%'
-  return `20日波动 ${Number(v.vol20 || 0).toFixed(1)}% ｜ 20/60/200日均线偏离 ${f(v.ma20Dev || 0)} / ${f(v.ma60Dev || 0)} / ${f(v.ma200Dev || 0)}`
+
+// VIX/VXN：仅纳指100 和标普500 有，其他标的为空字符串
+const vixText = computed(() => {
+  const v = props.vix
+  if (!v) return ''
+  const sign = v.changePct >= 0 ? '+' : ''
+  const label = v.label || 'VIX'
+  return `${label}：${v.value.toFixed(2)}（${sign}${v.changePct.toFixed(2)}%）`
 })
 
 // ====== 迷你走势图路径 ======
@@ -88,7 +94,7 @@ const sparkline = computed(() => {
 
 const percentileText = computed(() => {
   const v = props.metrics.drawdownPercentile
-  if (v == null) return '回撤分位数：无历史事件'
+  if (v == null) return '当日回撤分位数：无历史事件'
   return `当日回撤分位数：${v.toFixed(0)}%（近5年回撤中比 ${v.toFixed(0)}% 更深）`
 })
 
@@ -194,7 +200,6 @@ onUnmounted(() => {
           <text x="400" y="806" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
           <text x="400" y="828" text-anchor="middle" font-size="18" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
 
-          <!-- 迷你走势图：完整落在卡片内 -->
           <g v-if="sparkline" :transform="`translate(290, 838)`">
             <path :d="sparkline.d" fill="none" :stroke="palette.accent" stroke-width="1.8" />
             <circle :cx="sparkline.lastX" :cy="sparkline.lastY" r="3" :fill="palette.accent" />
@@ -202,13 +207,15 @@ onUnmounted(() => {
         </g>
 
         <!-- 辅助指标条 -->
-         <rect x="70" y="918" width="660" height="200" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
+        <rect x="70" y="918" width="660" height="200" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
         <text x="400" y="952" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
         <text x="400" y="988" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ percentileText }}</text>
-        <text x="400" y="1024" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
+        <text x="400" y="1024" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+          YTD：{{ ytdText }}<template v-if="vixText"> ｜ {{ vixText }}</template>
+        </text>
         <text x="400" y="1060" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryProgressText }} ｜ {{ maStateText }}</text>
         <text x="400" y="1096" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
-        
+
         <line x1="120" y1="1138" x2="680" y2="1138" :stroke="palette.grid" stroke-width="1" opacity="0.25" />
         <text x="400" y="1168" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
         <text x="400" y="1196" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>

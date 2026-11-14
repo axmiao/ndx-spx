@@ -11,7 +11,7 @@ import { Icon } from '@iconify/vue'
 
 const { categories, loading: listLoading, load } = useIndexList()
 const {
-  metrics, series, events, volatility, compareData, recentCloses,
+  metrics, series, events, volatility, compareData, recentCloses,vix,
   status, statusError, debug, sourceNote, isHistorical,
   refresh, applyManual
 } = useIndexData()
@@ -292,6 +292,7 @@ onMounted(async () => {
       :source-note="sourceNote"
       :max-drawdown-text="maxDrawdownText"
       :theme="theme"
+      :vix="vix"
     />
 
     <DrawdownChart :series="series" :compare-data="compareData" />
