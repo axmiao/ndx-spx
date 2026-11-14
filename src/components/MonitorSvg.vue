@@ -89,7 +89,7 @@ const sparkline = computed(() => {
 const percentileText = computed(() => {
   const v = props.metrics.drawdownPercentile
   if (v == null) return '回撤分位数：无历史事件'
-  return `回撤分位数：${v.toFixed(0)}%（近5年回撤中比 ${v.toFixed(0)}% 更深）`
+  return `当日回撤分位数：${v.toFixed(0)}%（近5年回撤中比 ${v.toFixed(0)}% 更深）`
 })
 
 const recoveryProgressText = computed(() => {
