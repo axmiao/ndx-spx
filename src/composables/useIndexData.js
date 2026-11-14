@@ -282,6 +282,7 @@ export function useIndexData() {
     const ytd = calcYtd(bars)
     const recent = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
 
+    const eventsForPercentile = detectDrawdownEvents(bars, 5)
     const drawdownPercentile = calcDrawdownPercentile(drawdown, eventsForPercentile)
     const recoveryProgress = calcRecoveryProgress(bars)
     const maState = calcMaState(bars)
@@ -298,7 +299,7 @@ export function useIndexData() {
         ma200: maState.ma200
       },
       series: buildDrawdownSeries(bars),
-      events: detectDrawdownEvents(bars, 5),
+      events: eventsForPercentile,
       volatility: calcVolatility(bars),
       recentCloses: recent
     }
