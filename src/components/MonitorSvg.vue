@@ -86,6 +86,23 @@ const sparkline = computed(() => {
   return { d, lastX, lastY, w, h }
 })
 
+const percentileText = computed(() => {
+  const v = props.metrics.drawdownPercentile
+  if (v == null) return '回撤分位数：无历史事件'
+  return `回撤分位数：${v.toFixed(0)}%（近5年回撤中比 ${v.toFixed(0)}% 更深）`
+})
+
+const recoveryProgressText = computed(() => {
+  const v = props.metrics.recoveryProgress
+  if (v == null) return '恢复进度：--'
+  return `恢复进度：${v.toFixed(0)}%（从谷底反弹）`
+})
+
+const maStateText = computed(() => {
+  const s = props.metrics.maState || '数据不足'
+  return `趋势：${s}`
+})
+
 defineExpose({ svgRef })
 
 function onDownloadSvg() {
@@ -131,7 +148,7 @@ onUnmounted(() => {
     </div>
 
     <div class="w-full max-w-[800px] rounded-xl overflow-hidden shadow-2xl">
-      <svg ref="svgRef" xmlns="http://www.w3.org/2000/svg" width="800" height="1220" viewBox="0 0 800 1200" class="block w-full h-auto">
+      <svg ref="svgRef" xmlns="http://www.w3.org/2000/svg" width="800" height="1240" viewBox="0 0 800 1240" class="block w-full h-auto">
         <defs>
           <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" :stop-color="palette.bgFrom" />
@@ -141,7 +158,7 @@ onUnmounted(() => {
             <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.35" />
           </filter>
         </defs>
-        <rect width="800" height="1220" fill="url(#bg)" />
+        <rect width="800" height="1240" fill="url(#bg)" />
 
         <text x="400" y="78" text-anchor="middle" font-size="52" font-weight="bold" :fill="palette.text"
               font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ title }}</text>
@@ -187,9 +204,9 @@ onUnmounted(() => {
         <!-- 辅助指标条 -->
          <rect x="70" y="918" width="660" height="200" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
         <text x="400" y="952" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
-        <text x="400" y="988" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ maxDrawdownText }}</text>
+        <text x="400" y="988" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ percentileText }}</text>
         <text x="400" y="1024" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">YTD：{{ ytdText }}</text>
-        <text x="400" y="1060" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ volText }}</text>
+        <text x="400" y="1060" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryProgressText }} ｜ {{ maStateText }}</text>
         <text x="400" y="1096" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
         
         <line x1="120" y1="1138" x2="680" y2="1138" :stroke="palette.grid" stroke-width="1" opacity="0.25" />

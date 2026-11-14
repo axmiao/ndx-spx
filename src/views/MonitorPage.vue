@@ -296,5 +296,26 @@ onMounted(async () => {
 
     <DrawdownChart :series="series" :compare-data="compareData" />
     <DrawdownEvents :events="events" />
+    <div class="w-full max-w-[800px] bg-navy-card/40 border border-gold/30 rounded-xl p-3">
+      <div class="text-gold text-sm font-bold mb-2">风险概览</div>
+      <div class="flex flex-col gap-1.5 text-xs">
+        <div class="flex justify-between items-center gap-2 text-gold/80">
+          <span class="text-gold/55 shrink-0">最大回撤</span>
+          <span class="text-right break-words">{{ maxDrawdownText }}</span>
+        </div>
+        <div class="flex justify-between items-center gap-2 text-gold/80">
+          <span class="text-gold/55 shrink-0">回撤分位数</span>
+          <span class="text-right">{{ metrics.drawdownPercentile == null ? '--' : metrics.drawdownPercentile.toFixed(0) + '%' }}</span>
+        </div>
+        <div class="flex justify-between items-center gap-2 text-gold/80">
+          <span class="text-gold/55 shrink-0">恢复进度</span>
+          <span class="text-right">{{ metrics.recoveryProgress == null ? '--' : metrics.recoveryProgress.toFixed(0) + '%' }}</span>
+        </div>
+        <div class="flex justify-between items-center gap-2 text-gold/80">
+          <span class="text-gold/55 shrink-0">趋势</span>
+          <span class="text-right">{{ metrics.maState || '数据不足' }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

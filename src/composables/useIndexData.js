@@ -152,7 +152,9 @@ function calcVolatility(bars) {
 export function useIndexData() {
   const metrics = ref({
     highPoint: 0, highDate: '', latestClose: 0, latestDate: '',
-    dailyChangePct: 0, drawdown: 0, recovery: 0, durationDays: 0, ytd: 0
+    dailyChangePct: 0, drawdown: 0, recovery: 0, durationDays: 0, ytd: 0,
+    drawdownPercentile: null, recoveryProgress: null, maState: '数据不足',
+    ma50: null, ma200: null
   })
   const series = ref([])
   const events = ref([])
@@ -208,6 +210,50 @@ export function useIndexData() {
     }))
   }
 
+  // 当前回撤分位数：当前回撤深度在历史回撤事件中的位置
+  function calcDrawdownPercentile(currentDrawdown, events) {
+    if (!events || events.length === 0) return null
+    const depths = events.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
+    const cur = Math.abs(currentDrawdown)
+    const below = depths.filter(d => d <= cur).length
+    return (below / depths.length) * 100
+  }
+
+  // 恢复进度：从谷底反弹的幅度占“谷底到峰值”的比例
+  function calcRecoveryProgress(bars) {
+    if (!bars || bars.length < 2) return null
+    // 找最后一个峰值和其后的谷底
+    let peakIdx = -1, peak = -Infinity
+    for (let i = 0; i < bars.length; i++) {
+      if (bars[i].c > peak) { peak = bars[i].c; peakIdx = i }
+    }
+    // 峰值之后的最低点
+    let trough = Infinity, troughIdx = -1
+    for (let i = peakIdx + 1; i < bars.length; i++) {
+      if (bars[i].c < trough) { trough = bars[i].c; troughIdx = i }
+    }
+    if (troughIdx === -1) return null
+    const last = bars[bars.length - 1].c
+    const denom = peak - trough
+    if (denom <= 0) return null
+    return ((last - trough) / denom) * 100
+  }
+
+  // 50/200 均线状态
+  function calcMaState(bars) {
+    if (!bars || bars.length < 200) return { ma50: null, ma200: null, state: '数据不足' }
+    const closes = bars.map(b => b.c)
+    const ma = (n) => closes.slice(-n).reduce((a, b) => a + b, 0) / n
+    const ma50 = ma(50), ma200 = ma(200)
+    const last = closes[closes.length - 1]
+    let state = '震荡'
+    if (ma50 > ma200 && last > ma50) state = '多头排列'
+    else if (ma50 < ma200 && last < ma50) state = '空头排列'
+    else if (ma50 > ma200) state = '多头回调'
+    else state = '空头反弹'
+    return { ma50, ma200, state }
+  }
+
   function computeAll(bars, meta, asOfDate) {
     let highPoint = -Infinity, highBar = null
     for (const b of bars) if (b.c > highPoint) { highPoint = b.c; highBar = b }
@@ -236,10 +282,20 @@ export function useIndexData() {
     const ytd = calcYtd(bars)
     const recent = bars.slice(-60).map(b => ({ t: b.t, c: b.c }))
 
+    const drawdownPercentile = calcDrawdownPercentile(drawdown, eventsForPercentile)
+    const recoveryProgress = calcRecoveryProgress(bars)
+    const maState = calcMaState(bars)
+
+
     return {
       metrics: {
         highPoint, highDate, latestClose, latestDate,
-        dailyChangePct, drawdown, recovery, durationDays, ytd
+        dailyChangePct, drawdown, recovery, durationDays, ytd,
+        drawdownPercentile,          // 新增：0–100，null 表示无事件
+        recoveryProgress,            // 新增：0–100，null 表示无回撤
+        maState: maState.state,      // 新增：字符串
+        ma50: maState.ma50,
+        ma200: maState.ma200
       },
       series: buildDrawdownSeries(bars),
       events: detectDrawdownEvents(bars, 5),
