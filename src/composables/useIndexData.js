@@ -212,8 +212,9 @@ export function useIndexData() {
 
   // 当前回撤分位数：当前回撤深度在历史回撤事件中的位置
   function calcDrawdownPercentile(currentDrawdown, events) {
-    if (!events || events.length === 0) return null
-    const depths = events.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
+    const closed = (events || []).filter(e => e.recovered)
+    if (closed.length === 0) return null
+    const depths = closed.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
     const cur = Math.abs(currentDrawdown)
     const below = depths.filter(d => d <= cur).length
     return (below / depths.length) * 100
