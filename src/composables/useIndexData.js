@@ -157,8 +157,9 @@ function calcDrawdownPercentile(currentDrawdown, events) {
   if (closed.length === 0) return null
   const depths = closed.map(e => Math.abs(e.depth)).sort((a, b) => a - b)
   const cur = Math.abs(currentDrawdown)
-  const deeper = depths.filter(d => d > cur).length
-  return (deeper / depths.length) * 100
+  console.log(11, cur)
+  const lighter = depths.filter(d => d < cur).length
+  return (lighter / depths.length) * 100
 }
 
 // 恢复进度：从谷底反弹的幅度占“谷底到峰值”的比例
