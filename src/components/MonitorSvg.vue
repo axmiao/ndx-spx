@@ -105,7 +105,7 @@ const percentileText = computed(() => {
   const total = props.metrics.eventCount ?? 0
   if (v == null || total === 0) return '当日回撤分位数：无历史事件'
   const deeper = Math.round((v / 100) * total)
-  return `当日回撤分位数：近5年 ${total} 次回撤中，${deeper} 次比当前更深`
+  return `当日回撤分位数：${v.toFixed(2)}% (近5年 ${total} 次回撤中，当前比 ${deeper} 次更深)`
 })
 
 const recoveryProgressText = computed(() => {
@@ -246,9 +246,9 @@ onUnmounted(() => {
             <rect x="0" y="0" :width="ddBarWidth" height="10" rx="5" :fill="drawdownColor" />
             <g v-for="t in ddTicks" :key="t">
               <line :x1="(t / maxDd) * 260" y1="-4" :x2="(t / maxDd) * 260" y2="14" :stroke="palette.grid" stroke-width="1" opacity="0.4" />
-              <text :x="(t / maxDd) * 260" y="28" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6">{{ t }}%</text>
+              <text :x="(t / maxDd) * 260" y="28" text-anchor="middle" font-size="16" :fill="palette.textDim" >{{ t }}%</text>
             </g>
-            <text x="0" y="-12" font-size="16" :fill="palette.textDim" opacity="0.7">回撤深度</text>
+            <text x="0" y="-12" font-size="16" :fill="palette.textDim" >回撤深度</text>
           </g>
         </g>
 
@@ -278,14 +278,14 @@ onUnmounted(() => {
             <circle cx="260" cy="0" r="5" :fill="palette.textDim" />
 
             <!-- 标签 -->
-            <text x="0" y="-14" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.7">谷底</text>
-            <text x="260" y="-14" text-anchor="end" font-size="16" :fill="palette.textDim" opacity="0.7">峰值</text>
+            <text x="0" y="-14" text-anchor="middle" font-size="16" :fill="palette.textDim" >谷底</text>
+            <text x="260" y="-14" text-anchor="end" font-size="16" :fill="palette.textDim" >峰值</text>
 
             <!-- 进度文字 -->
-            <text :x="recoveryScale.progress * 260" y="26" text-anchor="middle" font-size="16" :fill="palette.text" opacity="0.9">
-              当前已修复 {{ (recoveryScale.progress * 100).toFixed(0) }}%
+            <text :x="recoveryScale.progress * 260 + 20" y="26" text-anchor="middle" font-size="16" :fill="palette.text">
+              已修复 {{ (recoveryScale.progress * 100).toFixed(0) }}%
             </text>
-            <text x="130" y="46" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6">
+            <text x="130" y="46" text-anchor="middle" font-size="16" :fill="palette.textDim" >
               距峰值还需 {{ recoveryText }}
             </text>
           </g>
@@ -355,10 +355,10 @@ onUnmounted(() => {
             </text>
 
             <!-- 两端刻度 -->
-            <text x="0" y="28" text-anchor="start" font-size="16" :fill="palette.textDim" opacity="0.6">
+            <text x="0" y="28" text-anchor="start" font-size="16" :fill="palette.textDim" >
               最短 {{ durationScale.min }} 天
             </text>
-            <text x="260" y="28" text-anchor="end" font-size="16" :fill="palette.textDim" opacity="0.6">
+            <text x="260" y="28" text-anchor="end" font-size="16" :fill="palette.textDim" >
               最长 {{ durationScale.max }} 天
             </text>
 
@@ -370,7 +370,6 @@ onUnmounted(() => {
               y2="6"
               :stroke="palette.textDim"
               stroke-width="1"
-              opacity="0.5"
               stroke-dasharray="2 2"
             />
             <text
@@ -379,7 +378,6 @@ onUnmounted(() => {
               text-anchor="middle"
               font-size="16"
               :fill="palette.textDim"
-              opacity="0.6"
             >
               中位 {{ durationScale.median }} 天
             </text>
@@ -407,7 +405,6 @@ onUnmounted(() => {
               text-anchor="middle"
               font-size="16"
               :fill="palette.text"
-              opacity="0.9"
             >
               {{ fmtNum(sparkline.maxPoint.value) }}
             </text>
@@ -420,7 +417,6 @@ onUnmounted(() => {
               text-anchor="middle"
               font-size="16"
               :fill="drawdownColor"
-              opacity="0.9"
             >
               {{ fmtNum(sparkline.minPoint.value) }}
             </text>
@@ -428,7 +424,7 @@ onUnmounted(() => {
             <!-- 最新点 -->
             <circle :cx="sparkline.lastX" :cy="sparkline.lastY" r="3" :fill="palette.accent" />
 
-            <text x="0" y="80" font-size="16" :fill="palette.textDim" opacity="0.6">近60日</text>
+            <text x="0" y="80" font-size="16" :fill="palette.textDim" >近60日</text>
           </g>
         </g>
 
