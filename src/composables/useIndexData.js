@@ -260,7 +260,8 @@ export function useIndexData() {
     highPoint: 0, highDate: '', latestClose: 0, latestDate: '',
     dailyChangePct: 0, drawdown: 0, recovery: 0, durationDays: 0, ytd: 0,
     drawdownPercentile: null, recoveryProgress: null, maState: '数据不足',
-    ma50: null, ma200: null
+    ma50: null, ma200: null,
+    eventCount: 0
   })
   const series = ref([])
   const events = ref([])
@@ -362,7 +363,8 @@ export function useIndexData() {
         recoveryProgress,
         maState: maState.state,
         ma50: maState.ma50,
-        ma200: maState.ma200
+        ma200: maState.ma200,
+        eventCount: eventsForPercentile.length
       },
       series: buildDrawdownSeries(bars),
       events: eventsForPercentile,

@@ -12,7 +12,8 @@ const props = defineProps({
   sourceNote: { type: String, default: '' },
   maxDrawdownText: { type: String, default: '' },
   theme: { type: String, default: 'dark' },
-  vix: { type: Object, default: null }
+  vix: { type: Object, default: null },
+  loading: { type: Boolean, default: false }
 })
 
 const svgRef = ref(null)
@@ -94,8 +95,10 @@ const sparkline = computed(() => {
 
 const percentileText = computed(() => {
   const v = props.metrics.drawdownPercentile
-  if (v == null) return '本轮回撤分位数：无历史事件'
-  return `本轮回撤分位数：${v.toFixed(0)}%（近5年 ${v.toFixed(0)}% 的已恢复回撤比当前更浅）`
+  const total = (props.metrics.eventCount ?? 0)
+  if (v == null || total === 0) return '当日回撤分位数：无历史事件'
+  const deeper = Math.round((v / 100) * total)
+  return `当日回撤分位数：${v.toFixed(0)}% （近5年 ${total} 次大于5%回撤中，${deeper} 次比当前更浅）`
 })
 
 const recoveryProgressText = computed(() => {
@@ -154,6 +157,15 @@ onUnmounted(() => {
     </div>
 
     <div class="w-full max-w-[800px] rounded-xl overflow-hidden shadow-2xl">
+      <div
+        v-if="loading"
+        class="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      >
+        <div class="flex items-center gap-2 text-gold text-sm">
+          <span class="inline-block w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin"></span>
+          加载中…
+        </div>
+      </div>
       <svg ref="svgRef" xmlns="http://www.w3.org/2000/svg" width="800" height="1240" viewBox="0 0 800 1240" class="block w-full h-auto">
         <defs>
           <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">

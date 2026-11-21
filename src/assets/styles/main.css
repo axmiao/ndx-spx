@@ -15,4 +15,5 @@ body {
   background: linear-gradient(135deg, #0a1628 0%, #1a3a6b 100%);
   font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
   color: #FFD700;
+  font-variant-numeric: tabular-nums;
 }
