@@ -20,34 +20,20 @@ const svgRef = ref(null)
 const previewOpen = ref(false)
 const previewContainer = ref(null)
 
-// ====== 主题 ======
 const palette = computed(() => props.theme === 'light'
   ? {
-      bgFrom: '#eef2ff',
-      bgTo: '#c7d2fe',
-      card: '#ffffff',
-      cardOpacity: 0.72,
-      border: '#6366f1',
-      text: '#312e81',
-      textDim: '#4338ca',
-      dimOpacity: 0.7,
-      grid: '#6366f1',
-      accent: '#06b6d4'
+      bgFrom: '#eef2ff', bgTo: '#c7d2fe',
+      card: '#ffffff', cardOpacity: 0.72,
+      border: '#6366f1', text: '#312e81', textDim: '#4338ca',
+      dimOpacity: 0.7, grid: '#6366f1', accent: '#06b6d4'
     }
   : {
-      bgFrom: '#0a1628',
-      bgTo: '#1a3a6b',
-      card: '#1a3a6b',
-      cardOpacity: 0.55,
-      border: '#FFD700',
-      text: '#FFD700',
-      textDim: '#FFD700',
-      dimOpacity: 0.7,
-      grid: '#FFD700',
-      accent: '#FFD700'
+      bgFrom: '#0a1628', bgTo: '#1a3a6b',
+      card: '#1a3a6b', cardOpacity: 0.55,
+      border: '#FFD700', text: '#FFD700', textDim: '#FFD700',
+      dimOpacity: 0.7, grid: '#FFD700', accent: '#FFD700'
     })
 
-// ====== 回撤深度色阶 ======
 const drawdownColor = computed(() => {
   const dd = Number(props.metrics.drawdown)
   const light = props.theme === 'light'
@@ -55,6 +41,21 @@ const drawdownColor = computed(() => {
   if (dd >= -10) return light ? '#ca8a04' : '#FFD700'
   if (dd >= -20) return light ? '#ea580c' : '#fb923c'
   return light ? '#dc2626' : '#f87171'
+})
+
+const maxDd = computed(() => {
+  const v = Number(props.metrics.maxDrawdown5y)
+  return v > 0 ? v : 40
+})
+
+const ddBarWidth = computed(() => {
+  const cur = Math.abs(Number(props.metrics.drawdown))
+  return Math.min(cur / maxDd.value, 1) * 260
+})
+
+const ddTicks = computed(() => {
+  const max = maxDd.value
+  return [0.25, 0.5, 0.75, 1].map(r => Math.round(max * r))
 })
 
 const drawdownText = computed(() => Number(props.metrics.drawdown).toFixed(2) + '%')
@@ -70,7 +71,6 @@ const highText = computed(
   () => '历史收盘最高点 ' + fmtNum(props.metrics.highPoint) + '（' + props.metrics.highDate + '）'
 )
 
-// VIX/VXN：仅纳指100 和标普500 有，其他标的为空字符串
 const vixText = computed(() => {
   const v = props.vix
   if (!v) return ''
@@ -79,11 +79,10 @@ const vixText = computed(() => {
   return `${label}：${v.value.toFixed(2)}（${sign}${v.changePct.toFixed(2)}%）`
 })
 
-// ====== 迷你走势图路径 ======
 const sparkline = computed(() => {
   const data = props.recentCloses || []
   if (data.length < 2) return null
-  const w = 220, h = 50
+  const w = 180, h = 60
   const xs = data.map((_, i) => (i / (data.length - 1)) * w)
   const cs = data.map(d => d.c)
   const min = Math.min(...cs), max = Math.max(...cs)
@@ -95,10 +94,10 @@ const sparkline = computed(() => {
 
 const percentileText = computed(() => {
   const v = props.metrics.drawdownPercentile
-  const total = (props.metrics.eventCount ?? 0)
+  const total = props.metrics.eventCount ?? 0
   if (v == null || total === 0) return '当日回撤分位数：无历史事件'
   const deeper = Math.round((v / 100) * total)
-  return `当日回撤分位数：${v.toFixed(0)}% （近5年 ${total} 次大于5%回撤中，${deeper} 次比当前更浅）`
+  return `当日回撤分位数：近5年 ${total} 次回撤中，${deeper} 次比当前更深`
 })
 
 const recoveryProgressText = computed(() => {
@@ -110,6 +109,13 @@ const recoveryProgressText = computed(() => {
 const maStateText = computed(() => {
   const s = props.metrics.maState || '数据不足'
   return `趋势：${s}`
+})
+
+const recoveryRatio = computed(() => {
+  const h = Number(props.metrics.highPoint)
+  const c = Number(props.metrics.latestClose)
+  if (!h || !c) return 0.5
+  return Math.min(c / h, 1)
 })
 
 defineExpose({ svgRef })
@@ -156,16 +162,14 @@ onUnmounted(() => {
       <button class="px-6 py-2.5 border border-gold rounded-lg bg-navy-card text-gold font-bold text-sm hover:bg-gold hover:text-navy-bg transition-colors" @click="openPreview">预览图片</button>
     </div>
 
-    <div class="w-full max-w-[800px] rounded-xl overflow-hidden shadow-2xl">
-      <div
-        v-if="loading"
-        class="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      >
+    <div class="relative w-full max-w-[800px] rounded-xl overflow-hidden shadow-2xl">
+      <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm">
         <div class="flex items-center gap-2 text-gold text-sm">
           <span class="inline-block w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin"></span>
           加载中…
         </div>
       </div>
+
       <svg ref="svgRef" xmlns="http://www.w3.org/2000/svg" width="800" height="1240" viewBox="0 0 800 1240" class="block w-full h-auto">
         <defs>
           <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -186,52 +190,95 @@ onUnmounted(() => {
         </text>
         <line x1="120" y1="150" x2="680" y2="150" :stroke="palette.grid" stroke-width="1" opacity="0.35" />
 
-        <!-- 卡片 1：当前回撤（色阶） -->
+        <!-- 卡片 1：左文右图 -->
         <g filter="url(#shadow)">
-          <rect x="70" y="180" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
-          <text x="400" y="234" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
-          <text x="400" y="298" text-anchor="middle" font-size="48" font-weight="bold" :fill="drawdownColor" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ drawdownText }}</text>
+          <rect x="70" y="180" width="660" height="190" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+
+          <!-- 左侧文字 -->
+          <text x="260" y="248" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
+          <text x="260" y="303" text-anchor="middle" font-size="46" font-weight="bold" :fill="drawdownColor" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ drawdownText }}</text>
+          <text x="260" y="340" text-anchor="middle" font-size="12" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+            满量程 = 近5年最大回撤 {{ maxDd.toFixed(1) }}%
+          </text>
+
+          <!-- 右侧进度条 -->
+          <g :transform="`translate(420, 275)`">
+            <rect x="0" y="0" width="260" height="10" rx="5" :fill="palette.grid" opacity="0.15" />
+            <rect x="0" y="0" :width="ddBarWidth" height="10" rx="5" :fill="drawdownColor" />
+            <g v-for="t in ddTicks" :key="t">
+              <line :x1="(t / maxDd) * 260" y1="-4" :x2="(t / maxDd) * 260" y2="14" :stroke="palette.grid" stroke-width="1" opacity="0.4" />
+              <text :x="(t / maxDd) * 260" y="28" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">{{ t }}%</text>
+            </g>
+            <text x="0" y="-12" font-size="12" :fill="palette.textDim" opacity="0.7">回撤深度</text>
+          </g>
         </g>
 
+        <!-- 卡片 2：左文右图 -->
         <g filter="url(#shadow)">
-          <rect x="70" y="356" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
-          <text x="400" y="410" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
-          <text x="400" y="474" text-anchor="middle" font-size="48" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
+          <rect x="70" y="396" width="660" height="190" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+
+          <!-- 左侧文字 -->
+          <text x="260" y="464" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
+          <text x="260" y="534" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
+
+          <!-- 右侧柱状对比 -->
+          <g :transform="`translate(520, 440)`">
+            <rect x="0" :y="120 - recoveryRatio * 120" width="40" :height="recoveryRatio * 120" :fill="palette.accent" opacity="0.75" rx="4" />
+            <rect x="60" y="0" width="40" height="120" :fill="palette.grid" opacity="0.25" rx="4" />
+            <line x1="20" :y1="120 - recoveryRatio * 120" x2="80" y1="0" :stroke="drawdownColor" stroke-width="1.5" stroke-dasharray="4 3" />
+            <text x="20" y="140" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">当前</text>
+            <text x="80" y="140" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">高点</text>
+          </g>
         </g>
 
+        <!-- 卡片 3：左文右图 -->
         <g filter="url(#shadow)">
-          <rect x="70" y="532" width="660" height="150" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
-          <text x="400" y="586" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
-          <text x="400" y="650" text-anchor="middle" font-size="48" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ durationText }}</text>
+          <rect x="70" y="612" width="660" height="190" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
+
+          <!-- 左侧文字 -->
+          <text x="260" y="680" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">回撤持续天数</text>
+          <text x="260" y="750" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ durationText }}</text>
+
+          <!-- 右侧时间轴 -->
+          <g :transform="`translate(480, 710)`">
+            <line x1="0" y1="0" x2="260" y2="0" :stroke="palette.grid" stroke-width="2" opacity="0.25" />
+            <line x1="0" y1="0" :x2="durationBarWidth" y2="0" :stroke="drawdownColor" stroke-width="3" />
+            <circle cx="0" cy="0" r="5" :fill="palette.text" />
+            <circle :cx="durationBarWidth" cy="0" r="5" :fill="drawdownColor" />
+            <text x="0" y="-12" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.7">高点</text>
+            <text :x="durationBarWidth" y="-12" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.7">至今</text>
+            <text x="130" y="22" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.5">按 365 天比例</text>
+          </g>
         </g>
 
-        <!-- 卡片 4：最新收盘 + 迷你走势图 -->
+        <!-- 卡片 4：左文右图 -->
         <g filter="url(#shadow)">
-          <rect x="70" y="708" width="660" height="190" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
-          <text x="400" y="754" text-anchor="middle" font-size="28" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
-          <text x="400" y="806" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
-          <text x="400" y="828" text-anchor="middle" font-size="18" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+          <rect x="70" y="828" width="660" height="190" rx="18" :fill="palette.card" :fill-opacity="palette.cardOpacity" :stroke="palette.border" stroke-width="1.5" />
 
-          <g v-if="sparkline" :transform="`translate(290, 838)`">
+          <!-- 左侧文字 -->
+          <text x="260" y="896" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
+          <text x="260" y="958" text-anchor="middle" font-size="42" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
+          <text x="260" y="990" text-anchor="middle" font-size="16" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+
+          <!-- 右侧迷你走势图 -->
+          <g v-if="sparkline" :transform="`translate(500, 885)`">
             <path :d="sparkline.d" fill="none" :stroke="palette.accent" stroke-width="1.8" />
             <circle :cx="sparkline.lastX" :cy="sparkline.lastY" r="3" :fill="palette.accent" />
+            <text x="0" y="80" font-size="11" :fill="palette.textDim" opacity="0.6">近60日</text>
           </g>
         </g>
 
         <!-- 辅助指标条 -->
-        <rect x="70" y="918" width="660" height="200" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
-        <text x="400" y="952" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
-        <text x="400" y="988" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ percentileText }}</text>
-        <text x="400" y="1024" text-anchor="middle" font-size="19" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+        <rect x="70" y="1038" width="660" height="120" rx="14" :fill="palette.card" fill-opacity="0.35" :stroke="palette.border" stroke-width="1" stroke-opacity="0.5" />
+        <text x="400" y="1070" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ highText }}</text>
+        <text x="400" y="1100" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ percentileText }}</text>
+        <text x="400" y="1130" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.9" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
           YTD：{{ ytdText }}<template v-if="vixText"> ｜ {{ vixText }}</template>
         </text>
-        <text x="400" y="1060" text-anchor="middle" font-size="17" :fill="palette.text" opacity="0.85" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryProgressText }} ｜ {{ maStateText }}</text>
-        <text x="400" y="1096" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ sourceNote }}</text>
+        <text x="400" y="1156" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.6" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryProgressText }} ｜ {{ maStateText }} ｜ {{ sourceNote }}</text>
 
-        <line x1="120" y1="1138" x2="680" y2="1138" :stroke="palette.grid" stroke-width="1" opacity="0.25" />
-        <text x="400" y="1168" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日</text>
-        <text x="400" y="1196" text-anchor="middle" font-size="15" :fill="palette.textDim" opacity="0.55" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">经 Cloudflare Worker 代理 Yahoo Finance，失败时回退手动数据</text>
-        <text x="400" y="1218" text-anchor="middle" font-size="14" :fill="palette.textDim" opacity="0.35" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">指数指标监控 · 仅供参考，不构成投资建议</text>
+        <line x1="120" y1="1178" x2="680" y2="1178" :stroke="palette.grid" stroke-width="1" opacity="0.25" />
+        <text x="400" y="1206" text-anchor="middle" font-size="13" :fill="palette.textDim" opacity="0.5" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">口径：历史新高按近5年日收盘价；回撤持续天数按自然日；仅供参考</text>
       </svg>
     </div>
 

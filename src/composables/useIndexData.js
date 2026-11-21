@@ -261,7 +261,8 @@ export function useIndexData() {
     dailyChangePct: 0, drawdown: 0, recovery: 0, durationDays: 0, ytd: 0,
     drawdownPercentile: null, recoveryProgress: null, maState: '数据不足',
     ma50: null, ma200: null,
-    eventCount: 0
+    eventCount: 0,
+    maxDrawdown5y:0,
   })
   const series = ref([])
   const events = ref([])
@@ -355,6 +356,11 @@ export function useIndexData() {
     const recoveryProgress = calcRecoveryProgress(bars)
     const maState = calcMaState(bars)
 
+    const maxDrawdown5y = eventsForPercentile.length
+      ? Math.max(...eventsForPercentile.map(e => Math.abs(e.depth)))
+      : 0
+
+
     return {
       metrics: {
         highPoint, highDate, latestClose, latestDate,
@@ -364,7 +370,8 @@ export function useIndexData() {
         maState: maState.state,
         ma50: maState.ma50,
         ma200: maState.ma200,
-        eventCount: eventsForPercentile.length
+        eventCount: eventsForPercentile.length,
+        maxDrawdown5y,
       },
       series: buildDrawdownSeries(bars),
       events: eventsForPercentile,
