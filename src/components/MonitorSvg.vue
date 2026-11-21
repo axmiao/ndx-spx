@@ -236,7 +236,7 @@ onUnmounted(() => {
           <!-- 左侧文字 -->
           <text x="260" y="248" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">当前回撤比例</text>
           <text x="260" y="303" text-anchor="middle" font-size="46" font-weight="bold" :fill="drawdownColor" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ drawdownText }}</text>
-          <text x="260" y="340" text-anchor="middle" font-size="12" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+          <text x="260" y="340" text-anchor="middle" font-size="16" :fill="palette.textDim" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
             满量程 = 近5年最大回撤 {{ maxDd.toFixed(1) }}%
           </text>
 
@@ -246,9 +246,9 @@ onUnmounted(() => {
             <rect x="0" y="0" :width="ddBarWidth" height="10" rx="5" :fill="drawdownColor" />
             <g v-for="t in ddTicks" :key="t">
               <line :x1="(t / maxDd) * 260" y1="-4" :x2="(t / maxDd) * 260" y2="14" :stroke="palette.grid" stroke-width="1" opacity="0.4" />
-              <text :x="(t / maxDd) * 260" y="28" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">{{ t }}%</text>
+              <text :x="(t / maxDd) * 260" y="28" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6">{{ t }}%</text>
             </g>
-            <text x="0" y="-12" font-size="12" :fill="palette.textDim" opacity="0.7">回撤深度</text>
+            <text x="0" y="-12" font-size="16" :fill="palette.textDim" opacity="0.7">回撤深度</text>
           </g>
         </g>
 
@@ -259,7 +259,7 @@ onUnmounted(() => {
           <!-- 左侧文字 -->
           <text x="260" y="464" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
           <text x="260" y="524" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
-          <text v-if="recoveryScale" x="260" y="560" text-anchor="middle" font-size="12" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+          <text v-if="recoveryScale" x="260" y="560" text-anchor="middle" font-size="16" :fill="palette.textDim" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
             本次回撤：谷底 {{ fmtNum(recoveryScale.trough) }} → 峰值 {{ fmtNum(recoveryScale.peak) }}
           </text>
 
@@ -278,14 +278,14 @@ onUnmounted(() => {
             <circle cx="260" cy="0" r="5" :fill="palette.textDim" />
 
             <!-- 标签 -->
-            <text x="0" y="-14" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.7">谷底</text>
-            <text x="260" y="-14" text-anchor="end" font-size="11" :fill="palette.textDim" opacity="0.7">峰值</text>
+            <text x="0" y="-14" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.7">谷底</text>
+            <text x="260" y="-14" text-anchor="end" font-size="16" :fill="palette.textDim" opacity="0.7">峰值</text>
 
             <!-- 进度文字 -->
-            <text :x="recoveryScale.progress * 260" y="26" text-anchor="middle" font-size="12" :fill="palette.text" opacity="0.9">
+            <text :x="recoveryScale.progress * 260" y="26" text-anchor="middle" font-size="16" :fill="palette.text" opacity="0.9">
               当前已修复 {{ (recoveryScale.progress * 100).toFixed(0) }}%
             </text>
-            <text x="130" y="46" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">
+            <text x="130" y="46" text-anchor="middle" font-size="16" :fill="palette.textDim" opacity="0.6">
               距峰值还需 {{ recoveryText }}
             </text>
           </g>
@@ -303,9 +303,8 @@ onUnmounted(() => {
             x="260"
             y="780"
             text-anchor="middle"
-            font-size="12"
+            font-size="16"
             :fill="palette.textDim"
-            :opacity="palette.dimOpacity"
             font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif"
           >
             {{ durationScale.cur > durationScale.median ? '已超过历史中位数' : '短于历史中位数' }}
@@ -348,7 +347,7 @@ onUnmounted(() => {
               :x="durationScale.pos * 260"
               y="-20"
               text-anchor="middle"
-              font-size="12"
+              font-size="16"
               :fill="drawdownColor"
               font-weight="bold"
             >
@@ -356,10 +355,10 @@ onUnmounted(() => {
             </text>
 
             <!-- 两端刻度 -->
-            <text x="0" y="28" text-anchor="start" font-size="11" :fill="palette.textDim" opacity="0.6">
+            <text x="0" y="28" text-anchor="start" font-size="16" :fill="palette.textDim" opacity="0.6">
               最短 {{ durationScale.min }} 天
             </text>
-            <text x="260" y="28" text-anchor="end" font-size="11" :fill="palette.textDim" opacity="0.6">
+            <text x="260" y="28" text-anchor="end" font-size="16" :fill="palette.textDim" opacity="0.6">
               最长 {{ durationScale.max }} 天
             </text>
 
@@ -376,9 +375,9 @@ onUnmounted(() => {
             />
             <text
               :x="((durationScale.median - durationScale.min) / (durationScale.max - durationScale.min || 1)) * 260"
-              y="44"
+              y="50"
               text-anchor="middle"
-              font-size="11"
+              font-size="16"
               :fill="palette.textDim"
               opacity="0.6"
             >
@@ -394,7 +393,7 @@ onUnmounted(() => {
           <!-- 左侧文字 -->
           <text x="260" y="896" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">最新收盘价</text>
           <text x="260" y="950" text-anchor="middle" font-size="42" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ latestText }}</text>
-          <text x="260" y="990" text-anchor="middle" font-size="16" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
+          <text x="260" y="990" text-anchor="middle" font-size="16" :fill="palette.textDim" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ dailyText }}</text>
 
           <!-- 右侧迷你走势图：带最高/最低收盘价标识 -->
           <g v-if="sparkline" :transform="`translate(460, 880)`">
@@ -406,7 +405,7 @@ onUnmounted(() => {
               :x="sparkline.maxPoint.x"
               :y="sparkline.maxPoint.y - 7"
               text-anchor="middle"
-              font-size="10"
+              font-size="16"
               :fill="palette.text"
               opacity="0.9"
             >
@@ -417,9 +416,9 @@ onUnmounted(() => {
             <circle :cx="sparkline.minPoint.x" :cy="sparkline.minPoint.y" r="3" :fill="drawdownColor" />
             <text
               :x="sparkline.minPoint.x"
-              :y="sparkline.minPoint.y + 14"
+              :y="sparkline.minPoint.y + 18"
               text-anchor="middle"
-              font-size="10"
+              font-size="16"
               :fill="drawdownColor"
               opacity="0.9"
             >
@@ -429,7 +428,7 @@ onUnmounted(() => {
             <!-- 最新点 -->
             <circle :cx="sparkline.lastX" :cy="sparkline.lastY" r="3" :fill="palette.accent" />
 
-            <text x="0" y="80" font-size="11" :fill="palette.textDim" opacity="0.6">近60日</text>
+            <text x="0" y="80" font-size="16" :fill="palette.textDim" opacity="0.6">近60日</text>
           </g>
         </g>
 
