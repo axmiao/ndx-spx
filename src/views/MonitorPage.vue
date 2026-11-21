@@ -303,6 +303,7 @@ onMounted(async () => {
       :theme="theme"
       :vix="vix"
       :loading="loading"
+      :events="events"
     />
 
     <DrawdownChart :series="series" :compare-data="compareData" />

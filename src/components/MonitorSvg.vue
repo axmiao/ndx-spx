@@ -13,7 +13,8 @@ const props = defineProps({
   maxDrawdownText: { type: String, default: '' },
   theme: { type: String, default: 'dark' },
   vix: { type: Object, default: null },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  events: { type: Array, default: () => [] }
 })
 
 const svgRef = ref(null)
@@ -118,6 +119,24 @@ const recoveryRatio = computed(() => {
   return Math.min(c / h, 1)
 })
 
+// 本次回撤的修复进度：谷底 → 当前 → 峰值
+const recoveryScale = computed(() => {
+  const events = props.events || []
+  const lastOpen = [...events].reverse().find(e => !e.recovered)
+  const h = Number(props.metrics.highPoint)
+  const c = Number(props.metrics.latestClose)
+  if (!h || !c) return null
+
+  // 如果有未修复事件，用它的 peak/trough；否则用历史高点 + 当前价近似
+  const peak = lastOpen ? lastOpen.peakClose : h
+  const trough = lastOpen ? lastOpen.troughClose : c
+  if (!peak || !trough || peak <= trough) return null
+
+  const range = peak - trough
+  const progress = Math.min(Math.max((c - trough) / range, 0), 1) // 0–1
+  return { peak, trough, current: c, progress, gapPct: ((peak - c) / c) * 100 }
+})
+
 defineExpose({ svgRef })
 
 function onDownloadSvg() {
@@ -219,15 +238,36 @@ onUnmounted(() => {
 
           <!-- 左侧文字 -->
           <text x="260" y="464" text-anchor="middle" font-size="24" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">涨回历史新高所需涨幅</text>
-          <text x="260" y="534" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
+          <text x="260" y="524" text-anchor="middle" font-size="46" font-weight="bold" :fill="palette.text" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">{{ recoveryText }}</text>
+          <text v-if="recoveryScale" x="260" y="560" text-anchor="middle" font-size="12" :fill="palette.textDim" :opacity="palette.dimOpacity" font-family="Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, sans-serif">
+            本次回撤：谷底 {{ fmtNum(recoveryScale.trough) }} → 峰值 {{ fmtNum(recoveryScale.peak) }}
+          </text>
 
-          <!-- 右侧柱状对比 -->
-          <g :transform="`translate(520, 440)`">
-            <rect x="0" :y="120 - recoveryRatio * 120" width="40" :height="recoveryRatio * 120" :fill="palette.accent" opacity="0.75" rx="4" />
-            <rect x="60" y="0" width="40" height="120" :fill="palette.grid" opacity="0.25" rx="4" />
-            <line x1="20" :y1="120 - recoveryRatio * 120" x2="80" y1="0" :stroke="drawdownColor" stroke-width="1.5" stroke-dasharray="4 3" />
-            <text x="20" y="140" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">当前</text>
-            <text x="80" y="140" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">高点</text>
+          <!-- 右侧：本次回撤修复进度（谷底 → 当前 → 峰值） -->
+          <g v-if="recoveryScale" :transform="`translate(430, 470)`">
+            <!-- 轨道：谷底到峰值 -->
+            <line x1="0" y1="0" x2="260" y2="0" :stroke="palette.grid" stroke-width="2" opacity="0.2" />
+            <!-- 已修复部分：谷底到当前 -->
+            <line x1="0" y1="0" :x2="recoveryScale.progress * 260" y2="0" :stroke="palette.accent" stroke-width="4" />
+            <!-- 未修复部分：当前到峰值 -->
+            <line :x1="recoveryScale.progress * 260" y1="0" x2="260" y2="0" :stroke="drawdownColor" stroke-width="4" opacity="0.35" />
+
+            <!-- 三个节点 -->
+            <circle cx="0" cy="0" r="5" :fill="palette.textDim" />
+            <circle :cx="recoveryScale.progress * 260" cy="0" r="6" :fill="drawdownColor" />
+            <circle cx="260" cy="0" r="5" :fill="palette.textDim" />
+
+            <!-- 标签 -->
+            <text x="0" y="-14" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.7">谷底</text>
+            <text x="260" y="-14" text-anchor="end" font-size="11" :fill="palette.textDim" opacity="0.7">峰值</text>
+
+            <!-- 进度文字 -->
+            <text :x="recoveryScale.progress * 260" y="26" text-anchor="middle" font-size="12" :fill="palette.text" opacity="0.9">
+              当前已修复 {{ (recoveryScale.progress * 100).toFixed(0) }}%
+            </text>
+            <text x="130" y="46" text-anchor="middle" font-size="11" :fill="palette.textDim" opacity="0.6">
+              距峰值还需 {{ recoveryText }}
+            </text>
           </g>
         </g>
 
